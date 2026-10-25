@@ -73,6 +73,8 @@ create policy "egne innstillinger" on public.settings for all to authenticated
 -- Innloggede brukere får lese og skrive (RLS over begrenser det til egne rader); anonyme får ingenting.
 grant usage on schema public to authenticated;
 grant select, insert, update, delete on public.employers, public.shifts, public.settings to authenticated;
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on public.employers, public.shifts, public.settings to authenticated;
 revoke all on public.employers, public.shifts, public.settings from anon;
 
 -- ---------- Slett min konto (GDPR art. 17) ----------
