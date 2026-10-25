@@ -1,40 +1,77 @@
-# Vaktbok – shift log for people with many employers
+# Vaktbok
 
-**Live demo:** [https://hami0505.github.io/Vaktbok-prototype/](https://hami0505.github.io/Vaktbok-prototype/)
+Vakter fra alle arbeidsgivere på ett sted: timer, lønnsestimat, tillegg og varsel om for kort hviletid. Laget for folk i helse, omsorg og barnevern som tar vakter hos flere arbeidsgivere og via bemanningsbyråer.
 
-**Source code:** [https://github.com/Hami0505/Vaktbok-prototype](https://github.com/Hami0505/Vaktbok-prototype)
+## Funksjoner
 
-## What it is and why
-Many people in health, care and child welfare work extra shifts through staffing agencies and for several employers at once. Each employer has its own timesheet, and nobody sees the whole picture. That makes it easy to lose track of hours, to underestimate (or overestimate) next month's pay, and to accidentally book shifts with less than the 11 hours of rest the Norwegian Working Environment Act normally requires.
+- **Vakter på tvers av arbeidsgivere** med ukevisning på en 24-timers stripe, vakter over midnatt, pause og notat. Kopier en vakt til neste dag eller uke.
+- **Lønnsestimat med ekte tilleggsregler** per arbeidsgiver: så mange tillegg du vil (kveld, natt, lørdag, søndag, helligdager), i kroner per time eller prosent av timelønn, med valgfrie dager og klokkeslett. Norske helligdager, inkludert påske og pinse, regnes ut automatisk. Overtid per dag og/eller per uke (per arbeidsgiver, som i arbeidsmiljøloven). Feriepenger (10,2 % eller 12 %) og valgfritt netto-estimat fra skatteprosenten.
+- **Varsler** når hviletiden mellom vakter er kortere enn 11 timer (justerbart), når vakter overlapper, og når samlet arbeidstid i en uke passerer en grense.
+- **Månedsoversikt** per arbeidsgiver, regneark (CSV for Excel), kalenderfil (.ics) og timeliste til utklippstavlen.
+- **Sjekk mot lønnsslippen:** skriv inn utbetalt brutto og se om det stemmer med estimatet.
+- **Kopier tillegg** fra en arbeidsgiver til en annen, og **angre** sletting av vakter og arbeidsgivere.
+- **Konto og synk i sanntid** mellom mobil og PC, med innlogging via engangskode på e-post. Uten konto fungerer alt lokalt.
+- **Fungerer offline** og kan installeres på hjemskjermen. Endringer gjort uten nett sendes når nettet er tilbake.
+- **Personvern:** last ned alle data, slett alt, slett konto. Varsel hvis notatfeltet ser ut til å inneholde et fødselsnummer. Ingen sporing, ingen eksterne fonter.
+- **Import** fra prototypen (Vaktbok-prototype) tilbys automatisk hvis den har data i samme nettleser.
 
-Vaktbok puts all shifts from all employers in one place.
+## Teknikk
 
-## Main features
-1. **Register shifts across employers** – date, start/end (shifts past midnight are handled), break and a note. A week view draws each shift on a 24-hour strip with the evening/night zone (17–06) shaded.
-2. **Automatic hour and pay estimate** – per employer you set hourly rate, evening/night supplement and weekend supplement. The month view shows hours, supplement hours and estimated gross pay per employer.
-3. **Rest-time and overlap warnings** – the app flags shifts that start less than 11 hours after the previous one ended, or overlap another shift.
+Ren HTML, CSS og JavaScript-moduler. Ingen build-steg, så appen kan ligge rett på GitHub Pages.
 
-Extras: copy a shift to the next day, export a month to CSV (opens in Excel), copy a plain-text timesheet, demo data, light/dark mode, works on mobile. All data stays in the browser (localStorage) – nothing is sent anywhere, and no personal data is in the repository.
+| Fil | Innhold |
+|---|---|
+| `js/logic.js` | Ren beregningslogikk: lønn, tillegg, helligdager, varsler, validering, eksport |
+| `js/sync-core.js` | Ren synklogikk: utboks, rekkefølge, sammenslåing med serverdata |
+| `js/store.js` | Datalag: lokal lagring, utboks og synk mot Supabase |
+| `js/app.js` | Brukergrensesnitt |
+| `js/config.js` | Supabase-nøkler (offentlige, tilgang styres av RLS) |
+| `supabase/schema.sql` | Tabeller, Row Level Security og sletting av konto |
+| `sw.js` | Service worker for offline-bruk |
+| `tests/` | 35 automatiske tester (`npm test`), kjøres på hver push via GitHub Actions |
 
-## Tech
-Plain HTML, CSS and JavaScript in one file (`index.html`). No build step, no backend. `logic.js` holds the calculation logic (same code is inlined in `index.html`), and `test.js` tests it with Node.
+Lagring er lokal først: alle endringer lagres i nettleseren med en gang og legges i en utboks. Når du er innlogget og på nett, sendes utboksen til Supabase og serverdata hentes inn. Serveren er fasit, unntatt for endringer som ennå ikke er sendt.
 
-## How I used AI
-I used Claude (Anthropic) as my coding partner:
-- **Idea:** I described my own everyday problem (shifts for several employers via a staffing agency) and we narrowed it down to the three features above, following the assignment's "pick 2–3 features" advice.
-- **Plan:** separated pure logic (time/pay/rest calculations) from the UI, so the logic could be tested on its own.
-- **Code:** the AI generated the logic, the UI and the styling from my descriptions in natural language.
-- **Test and improve:** we wrote automated tests for the core logic and edge cases, and I tested the live app manually (see below).
+## Oppsett
 
-## How I tested and improved it
-- **Unit tests (`node test.js`, 17 checks):** day shift with break, evening supplement hours, night shift crossing midnight into Saturday (evening + weekend hours), break longer than the shift (no negative hours), rest-time warning (8 h gap), no false warning with 16 h gap, overlap between two employers, month filtering, CSV escaping.
-- **Browser smoke test (jsdom):** loads the page, loads demo data, checks that week bars, shift list, warnings and month totals render without errors.
-- **Security:** checked that employer names/notes are HTML-escaped (an `<img onerror>` name is shown as text, not run).
-- **Edge cases handled and verified by tests:** break can't exceed the shift; overlap check compares against the latest-ending previous shift; shifts crossing midnight are drawn on both days; CSV includes a BOM so æøå display correctly in Excel.
-- **My own testing:** I opened the live site, loaded demo data, added my own employers and shifts, and checked that warnings, month totals and CSV export worked.
+### 1. Supabase
 
-## Limitations
-Pay is an estimate before tax with simplified supplement rules (one evening/night window, flat weekend supplement). Data is stored per browser, so it does not sync between devices.
+1. Opprett et prosjekt på [supabase.com](https://supabase.com). Velg en region i EU.
+2. Åpne **SQL Editor**, lim inn hele `supabase/schema.sql` og kjør.
+3. Under **Authentication → Sign In / Providers**: sjekk at **Email** er på.
+4. Under **Authentication → Emails → Magic Link**: legg til koden i malen, for eksempel:
+   ```html
+   <h2>Logg inn i Vaktbok</h2>
+   <p>Koden din er <strong>{{ .Token }}</strong></p>
+   <p>Eller trykk her: <a href="{{ .ConfirmationURL }}">Logg inn</a></p>
+   ```
+   Gjør det samme i **Confirm signup**-malen. Koden er viktig fordi lenker fra e-post på iPhone åpnes i Safari og ikke i appen på hjemskjermen.
+5. Under **Authentication → URL Configuration**: sett **Site URL** til adressen appen ligger på (for eksempel `https://hami0505.github.io/Vaktbok-prototype/`) og legg samme adresse til under **Redirect URLs**.
+6. Under **Project Settings → API**: kopier **Project URL** og **anon public key** inn i `js/config.js`.
 
-## Run locally
-Open `index.html` in a browser. Tests: `node test.js`.
+### 2. GitHub Pages
+
+1. Kopier filene inn i roten av repoet (`Vaktbok-prototype`). Slett de gamle `logic.js` og `test.js` i roten.
+2. **Settings → Pages**: velg **Deploy from a branch**, `main` og `/ (root)`.
+
+### 3. Lokalt
+
+```bash
+npm start      # serverer appen på http://localhost:5173
+npm test       # kjører testene
+```
+
+Med tomme felt i `js/config.js` kjører appen uten server, bare med lokal lagring.
+
+## Før ekte brukere slipper til
+
+- [ ] **Egen e-posttjeneste (SMTP).** Supabase sin innebygde e-post er bare for testing og har en lav grense på antall e-poster i timen. Sett opp SMTP under **Authentication → Emails → SMTP Settings** med en leverandør som Resend, Brevo eller Postmark.
+- [ ] **Fyll inn personvernerklæringen** (`personvern.html`): navn eller firmanavn og kontakt-e-post.
+- [ ] **Databehandleravtale (DPA)** med Supabase. Den kan signeres fra Supabase-dashbordet.
+- [ ] **Abonnement og sikkerhetskopier.** Sjekk vilkårene for gratisnivået hos Supabase (blant annet om inaktive prosjekter settes på pause og hvilke sikkerhetskopier som er inkludert). For betalende eller mange brukere bør prosjektet ligge på et betalt nivå.
+- [ ] **Eget domene** (valgfritt), for eksempel `vaktbok.no`, satt opp under Settings → Pages. Husk å oppdatere Site URL i Supabase.
+- [ ] **Øk `VERSION` i `sw.js`** ved hver utgivelse, så får brukerne beskjed om at en ny versjon er klar.
+
+## Begrensninger
+
+Lønn er et estimat før skatt. Tillegg regnes ut fra kalenderdagen hvert minutt faller på, og pause trekkes forholdsmessig fra alle tidsrom i vakta. Ved samtidige endringer av samme vakt på to enheter vinner den siste. Sjekk alltid mot lønnsslippen.

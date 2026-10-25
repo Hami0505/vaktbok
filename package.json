@@ -1,0 +1,13 @@
+{
+  "name": "vaktbok",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Vakter fra alle arbeidsgivere på ett sted – timer, lønnsestimat og hviletidsvarsler.",
+  "type": "module",
+  "scripts": {
+    "test": "TZ=Europe/Oslo node --test \"tests/*.test.js\"",
+    "start": "npx --yes serve@14.2.4 -l 5173 ."
+  },
+  "engines": { "node": ">=20" },
+  "license": "UNLICENSED"
+}

@@ -1,498 +1,233 @@
 <!DOCTYPE html>
-<html lang="no">
+<html lang="nb">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <title>Vaktbok – vakter hos flere arbeidsgivere</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;700;800&display=swap" rel="stylesheet">
-<style>
-:root{
-  --paper:#EEF2F0; --card:#FFFFFF; --ink:#17252E; --muted:#5B6B72; --line:#D3DBD8;
-  --accent:#1F6F6B; --accent-ink:#FFFFFF; --night:rgba(47,59,102,.13); --warn:#9A6200; --warn-bg:#FFF4DC;
-  --bad:#B3362C; --bad-bg:#FBE7E4; color-scheme:light;
-}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --paper:#10171B; --card:#172227; --ink:#E6EEEC; --muted:#93A4A9; --line:#2A3940;
-  --accent:#4FB3AB; --accent-ink:#0C1A19; --night:rgba(140,155,224,.14); --warn:#F0B54A; --warn-bg:#2E2412;
-  --bad:#F08B80; --bad-bg:#3A1C19; color-scheme:dark;
-}}
-:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-*,*::before,*::after{box-sizing:inherit}
-body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.5 "Schibsted Grotesk",system-ui,-apple-system,"Segoe UI",sans-serif;font-variant-numeric:tabular-nums}
-.wrap{max-width:860px;margin:0 auto;padding:20px 16px 64px}
-header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
-h1{font-size:2.4rem;font-weight:800;letter-spacing:-.03em;margin:0}
-h1 small{display:block;font-size:.95rem;font-weight:400;letter-spacing:0;color:var(--muted)}
-h2{font-size:1.25rem;margin:0 0 12px}
-nav{display:flex;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:4px;margin:20px 0}
-nav button{flex:1;border:0;background:none;color:var(--ink);font:inherit;font-weight:500;padding:8px 10px;border-radius:999px;cursor:pointer}
-nav button[aria-selected="true"]{background:var(--ink);color:var(--paper)}
-section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px}
-.muted{color:var(--muted)} .small{font-size:.875rem}
-/* Ukestripa */
-.week{display:grid;grid-template-columns:44px 1fr;gap:6px 10px;align-items:center}
-.week .d{font-weight:700;font-size:.9rem}.week .d.today{color:var(--accent)}
-.track{position:relative;height:26px;border-radius:6px;background:
-  linear-gradient(90deg,var(--night) 0 25%,transparent 25% 70.833%,var(--night) 70.833% 100%);
-  border:1px solid var(--line);overflow:hidden}
-.track .bar{position:absolute;top:3px;bottom:3px;border-radius:4px;color:#fff;font-size:.72rem;font-weight:700;padding:0 6px;white-space:nowrap;overflow:hidden;line-height:18px}
-.track.mini{height:14px}.track.mini .bar{top:2px;bottom:2px;padding:0}
-.ticks{display:flex;justify-content:space-between;font-size:.72rem;color:var(--muted);grid-column:2}
-.weeknav{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-/* Skjema */
-form .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
-label{display:flex;flex-direction:column;gap:4px;font-size:.85rem;font-weight:500}
-input,select{font:inherit;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-width:0}
-.btn{font:inherit;font-weight:700;border:1px solid var(--ink);background:var(--card);color:var(--ink);border-radius:8px;padding:8px 14px;cursor:pointer}
-.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
-.btn.link{border:0;background:none;padding:4px 6px;font-weight:500;text-decoration:underline;color:var(--muted)}
-.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
-:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
-/* Lister */
-.shift{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:12px 0;border-top:1px solid var(--line)}
-.shift:first-of-type{border-top:0}
-.shift .who{font-weight:700;display:flex;align-items:center;gap:8px}
-.dot{width:10px;height:10px;border-radius:50%;flex:none}
-.shift .num{text-align:right;font-weight:700}
-.shift .track{grid-column:1/-1}
-.flag{grid-column:1/-1;font-size:.85rem;border-radius:6px;padding:6px 10px}
-.flag.rest{background:var(--warn-bg);color:var(--warn)} .flag.overlap{background:var(--bad-bg);color:var(--bad)}
-.monthhead{font-weight:800;margin:18px 0 4px;font-size:1.05rem}
-.totals{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:8px 0 16px}
-.totals div{border-left:3px solid var(--accent);padding-left:10px}
-.totals b{display:block;font-size:1.6rem;letter-spacing:-.02em}
-.scroll{overflow-x:auto}
-table{border-collapse:collapse;width:100%;min-width:520px}
-th,td{text-align:right;padding:8px 6px;border-bottom:1px solid var(--line);font-size:.92rem}
-th:first-child,td:first-child{text-align:left}
-th{font-weight:500;color:var(--muted)}
-.empty{text-align:center;padding:24px 8px}
-.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:999px;font-weight:500;opacity:0;transition:opacity .2s;pointer-events:none}
-.toast.show{opacity:1}
-[hidden]{display:none!important}
-@media (prefers-reduced-motion:reduce){*{transition:none!important}}
-</style>
+<meta name="description" content="Før vakter fra alle arbeidsgivere på ett sted. Timer, lønnsestimat og varsel om for kort hviletid.">
+<meta name="theme-color" content="#EEF2F0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#10171B" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preload" href="fonts/schibsted-grotesk-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="css/app.css">
+<script type="module" src="js/app.js"></script>
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <h1>Vaktbok<small>Alle vaktene dine, fra alle arbeidsgivere, på ett sted.</small></h1>
+  <header class="top">
+    <h1>Vaktbok</h1>
+    <button class="sync" id="syncPill" type="button" data-state="local">
+      <span class="sync-dot" aria-hidden="true"></span><span id="syncText">Lagres på denne enheten</span>
+    </button>
   </header>
 
-  <nav role="tablist">
-    <button role="tab" data-tab="vakter" aria-selected="true">Vakter</button>
-    <button role="tab" data-tab="maned" aria-selected="false">Måned</button>
-    <button role="tab" data-tab="arbeidsgivere" aria-selected="false">Arbeidsgivere</button>
+  <div id="banners"></div>
+
+  <nav aria-label="Hovedmeny">
+    <div class="tabs" role="tablist">
+    <button role="tab" id="t-uke" data-tab="uke" aria-selected="true" aria-controls="v-uke">Uke</button>
+    <button role="tab" id="t-maned" data-tab="maned" aria-selected="false" tabindex="-1" aria-controls="v-maned">Måned</button>
+    <button role="tab" id="t-arbeidsgivere" data-tab="arbeidsgivere" aria-selected="false" tabindex="-1" aria-controls="v-arbeidsgivere">Arbeidsgivere</button>
+    <button role="tab" id="t-konto" data-tab="konto" aria-selected="false" tabindex="-1" aria-controls="v-konto">Konto</button>
+    </div>
   </nav>
 
-  <!-- VAKTER -->
-  <div id="tab-vakter">
-    <section aria-label="Uka">
-      <div class="weeknav">
-        <button class="btn link" id="prevWeek" aria-label="Forrige uke">‹ Forrige</button>
-        <h2 id="weekTitle" style="margin:0"></h2>
-        <button class="btn link" id="nextWeek" aria-label="Neste uke">Neste ›</button>
-      </div>
-      <div class="week" id="week"></div>
-      <p class="small muted" style="margin:10px 0 0">Skyggelagt felt er kveld/natt (17–06).</p>
-    </section>
+  <main>
+    <!-- UKE -->
+    <div id="v-uke" role="tabpanel" aria-labelledby="t-uke">
+      <section class="panel">
+        <div class="weeknav">
+          <button class="icon-btn" id="prevWeek" type="button" aria-label="Forrige uke">‹</button>
+          <div class="weekhead">
+            <h2 id="weekTitle"></h2>
+            <button class="btn link" id="todayBtn" type="button">Gå til i dag</button>
+          </div>
+          <button class="icon-btn" id="nextWeek" type="button" aria-label="Neste uke">›</button>
+        </div>
+        <div class="week" id="week"></div>
+        <div class="legend small muted"><span class="swatch" aria-hidden="true"></span>Kveld og natt (17–06)</div>
+      </section>
 
-    <section>
-      <h2 id="formTitle">Registrer vakt</h2>
-      <form id="shiftForm">
-        <div class="grid">
-          <label>Arbeidsgiver<select id="fEmp" required></select></label>
-          <label>Dato<input type="date" id="fDate" required></label>
-          <label>Start<input type="time" id="fStart" required></label>
-          <label>Slutt<input type="time" id="fEnd" required></label>
-          <label>Pause (min)<input type="number" id="fBreak" min="0" step="5" value="0"></label>
-          <label>Notat<input type="text" id="fNote" maxlength="80" placeholder="F.eks. avdeling"></label>
+      <div class="actionbar">
+        <button class="btn primary big" id="newShiftBtn" type="button">Ny vakt</button>
+        <p class="weeksum" id="weekSum"></p>
+      </div>
+
+      <section class="panel">
+        <h2>Vakter denne uka</h2>
+        <div id="weekList"></div>
+      </section>
+    </div>
+
+    <!-- MÅNED -->
+    <div id="v-maned" role="tabpanel" aria-labelledby="t-maned" hidden>
+      <section class="panel">
+        <div class="monthnav">
+          <button class="icon-btn" id="prevMonth" type="button" aria-label="Forrige måned">‹</button>
+          <h2 id="monthTitle"></h2>
+          <button class="icon-btn" id="nextMonth" type="button" aria-label="Neste måned">›</button>
+        </div>
+        <div class="totals" id="totals"></div>
+        <div class="scroll"><table id="empTable"></table></div>
+        <p class="small muted">Estimat før skatt. Tillegg, overtid og feriepenger regnes etter reglene du har lagt inn per arbeidsgiver. Sjekk alltid mot lønnsslippen.</p>
+        <div class="row">
+          <button class="btn" id="csvBtn" type="button">Last ned regneark (CSV)</button>
+          <button class="btn" id="icsBtn" type="button">Legg i kalenderen (.ics)</button>
+          <select id="sheetEmp" class="inline-select" aria-label="Arbeidsgiver for timeliste"></select>
+          <button class="btn" id="sheetBtn" type="button">Kopier timeliste</button>
+        </div>
+      </section>
+      <section class="panel" aria-labelledby="payslipTitle">
+        <h2 id="payslipTitle">Sjekk mot lønnsslippen</h2>
+        <p class="small muted">Skriv inn brutto fra lønnsslippen for vaktene denne måneden, så ser du om du har fått riktig betalt.</p>
+        <div id="payslipList"></div>
+      </section>
+      <section class="panel">
+        <h2>Varsler denne måneden</h2>
+        <div id="warnList"></div>
+      </section>
+    </div>
+
+    <!-- ARBEIDSGIVERE -->
+    <div id="v-arbeidsgivere" role="tabpanel" aria-labelledby="t-arbeidsgivere" hidden>
+      <section class="panel">
+        <div class="panelhead">
+          <h2>Dine arbeidsgivere</h2>
+          <button class="btn primary" id="newEmpBtn" type="button">Legg til arbeidsgiver</button>
+        </div>
+        <div id="empList"></div>
+      </section>
+    </div>
+
+    <!-- KONTO -->
+    <div id="v-konto" role="tabpanel" aria-labelledby="t-konto" hidden>
+      <section class="panel" id="accountPanel"></section>
+
+      <section class="panel">
+        <h2>Innstillinger</h2>
+        <form id="settingsForm" class="grid">
+          <label>Feriepenger
+            <select id="sHoliday">
+              <option value="10.2">10,2 % (vanlig)</option>
+              <option value="12">12 % (5 ukers ferie)</option>
+            </select>
+          </label>
+          <label>Minste hviletid mellom vakter (timer)<input type="number" id="sRest" min="0" max="24" step="0.5" inputmode="decimal"></label>
+          <label>Varsle når uka passerer (timer)<input type="number" id="sWeek" min="1" max="168" step="1" inputmode="numeric"></label>
+          <label>Skattetrekk i prosent (valgfritt)<input type="number" id="sTax" min="0" max="60" step="0.5" inputmode="decimal" placeholder="F.eks. 30" aria-describedby="taxHelp">
+            <span class="help" id="taxHelp">Fra skattekortet. Gir et omtrentlig netto i månedsoversikten.</span></label>
+        </form>
+      </section>
+
+      <section class="panel">
+        <h2>Dine data</h2>
+        <p class="small muted" id="dataNote"></p>
+        <div class="row">
+          <button class="btn" id="exportBtn" type="button">Last ned alle data</button>
+          <label class="btn filebtn">Importer fra fil<input type="file" id="importFile" accept="application/json,.json"></label>
+          <button class="btn" id="demoBtn" type="button" hidden>Prøv med eksempeldata</button>
         </div>
         <div class="row">
-          <button class="btn primary" type="submit" id="saveBtn">Lagre vakt</button>
-          <button class="btn" type="button" id="cancelEdit" hidden>Avbryt endring</button>
-          <span class="small muted" id="preview"></span>
+          <button class="btn danger" id="wipeBtn" type="button">Slett alle vakter og arbeidsgivere</button>
+          <button class="btn danger" id="deleteAccountBtn" type="button" hidden>Slett kontoen min</button>
         </div>
-      </form>
-    </section>
-
-    <section>
-      <h2>Kommende og tidligere vakter</h2>
-      <div id="shiftList"></div>
-    </section>
-  </div>
-
-  <!-- MÅNED -->
-  <div id="tab-maned" hidden>
-    <section>
-      <div class="row" style="margin-top:0;justify-content:space-between">
-        <label style="flex-direction:row;align-items:center;gap:8px">Måned <input type="month" id="mPick"></label>
-        <div class="row" style="margin-top:0">
-          <button class="btn" id="copyBtn">Kopier timeliste</button>
-          <button class="btn primary" id="csvBtn">Last ned CSV</button>
-        </div>
-      </div>
-      <div class="totals" id="totals"></div>
-      <div class="scroll"><table id="empTable"></table></div>
-      <p class="small muted">Lønn er et estimat før skatt: timelønn + kveld/natt-tillegg (17–06) + helgetillegg (lør–søn). Sjekk alltid mot lønnsslippen.</p>
-    </section>
-    <section>
-      <h2>Varsler denne måneden</h2>
-      <div id="warnList"></div>
-    </section>
-  </div>
-
-  <!-- ARBEIDSGIVERE -->
-  <div id="tab-arbeidsgivere" hidden>
-    <section>
-      <h2 id="empFormTitle">Legg til arbeidsgiver</h2>
-      <form id="empForm">
-        <div class="grid">
-          <label>Navn<input type="text" id="eName" required maxlength="40"></label>
-          <label>Timelønn (kr)<input type="number" id="eRate" min="0" step="1" required></label>
-          <label>Kveld/natt-tillegg (kr/t)<input type="number" id="eEve" min="0" step="1" value="0"></label>
-          <label>Helgetillegg (kr/t)<input type="number" id="eWkd" min="0" step="1" value="0"></label>
-          <label>Farge<input type="color" id="eColor" value="#1F6F6B"></label>
-        </div>
-        <div class="row">
-          <button class="btn primary" type="submit">Lagre arbeidsgiver</button>
-          <button class="btn" type="button" id="cancelEmp" hidden>Avbryt endring</button>
-        </div>
-      </form>
-    </section>
-    <section>
-      <h2>Dine arbeidsgivere</h2>
-      <div id="empList"></div>
-    </section>
-    <section>
-      <h2>Data</h2>
-      <p class="small muted" style="margin-top:0">Alt lagres bare i denne nettleseren. Ingenting sendes noe sted.</p>
-      <div class="row">
-        <button class="btn" id="demoBtn">Last inn eksempeldata</button>
-        <button class="btn" id="resetBtn">Slett alle data</button>
-      </div>
-    </section>
-  </div>
+        <p class="small"><a href="personvern.html">Personvernerklæring</a></p>
+      </section>
+    </div>
+  </main>
+  <footer class="foot small muted">
+    <a href="personvern.html">Personvern</a>
+    <span>Lønn er et estimat før skatt. Sjekk alltid mot lønnsslippen.</span>
+  </footer>
 </div>
+
+<!-- Vakt-dialog -->
+<dialog id="shiftDialog" aria-labelledby="shiftDialogTitle">
+  <form method="dialog" id="shiftForm" novalidate>
+    <h2 id="shiftDialogTitle">Ny vakt</h2>
+    <div class="grid">
+      <label class="span2">Arbeidsgiver<select id="fEmp" required></select></label>
+      <label class="span2">Dato<input type="date" id="fDate" required></label>
+      <label>Start<input type="time" id="fStart" required></label>
+      <label>Slutt<input type="time" id="fEnd" required></label>
+      <label class="span2">Ubetalt pause (minutter)<input type="number" id="fBreak" min="0" max="600" step="5" value="0" inputmode="numeric"></label>
+      <label class="span2">Notat (valgfritt)
+        <input type="text" id="fNote" maxlength="200" placeholder="F.eks. avdeling eller vaktkode" aria-describedby="noteHelp">
+        <span class="help" id="noteHelp">Ikke skriv navn eller opplysninger om brukere, beboere eller klienter.</span>
+      </label>
+    </div>
+    <div class="preview" id="preview" aria-live="polite"></div>
+    <ul class="errors" id="shiftErrors" role="alert"></ul>
+    <div class="dialog-actions">
+      <button class="btn danger" type="button" id="deleteShiftBtn" hidden>Slett vakt</button>
+      <span class="spacer"></span>
+      <button class="btn" type="button" data-close>Avbryt</button>
+      <button class="btn primary" type="submit" id="saveShiftBtn">Lagre vakt</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Arbeidsgiver-dialog -->
+<dialog id="empDialog" aria-labelledby="empDialogTitle" class="wide">
+  <form method="dialog" id="empForm" novalidate>
+    <h2 id="empDialogTitle">Ny arbeidsgiver</h2>
+    <div class="grid">
+      <label class="span2">Navn<input type="text" id="eName" maxlength="60" required placeholder="F.eks. Flexibemanning"></label>
+      <label>Timelønn (kr)<input type="number" id="eRate" min="0" step="0.01" required inputmode="decimal"></label>
+      <label>Farge<input type="color" id="eColor" value="#1F6F6B"></label>
+    </div>
+
+    <fieldset>
+      <legend>Tillegg</legend>
+      <p class="help">Legg inn tilleggene fra arbeidsavtalen eller tariffen din. Flere tillegg kan gjelde samtidig, for eksempel kveld og helg.</p>
+      <div id="ruleList"></div>
+      <div class="row">
+        <button class="btn" type="button" id="addRuleBtn">Legg til tillegg</button>
+        <button class="btn link" type="button" id="presetBtn">Fyll inn vanlige tillegg</button>
+        <select id="copyRulesFrom" class="inline-select" aria-label="Kopier tillegg fra en annen arbeidsgiver"></select>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Overtid</legend>
+      <label class="check"><input type="checkbox" id="eOtOn"> Beregn overtid</label>
+      <div class="grid three" id="otFields">
+        <label>Per dag, etter (timer)<input type="number" id="eOtAfter" min="1" max="24" step="0.5" inputmode="decimal" placeholder="Av"></label>
+        <label>Per uke, etter (timer)<input type="number" id="eOtWeek" min="1" max="100" step="0.5" inputmode="decimal" placeholder="Av"></label>
+        <label>Tillegg (%)<input type="number" id="eOtPct" min="0" max="300" step="1" inputmode="numeric"></label>
+        <p class="help span-all">Arbeidsmiljøloven regner som hovedregel arbeid over 9 timer i døgnet eller 40 timer i uka som overtid, med minst 40 % tillegg. Tom grense betyr av. Overtid regnes per arbeidsgiver.</p>
+      </div>
+    </fieldset>
+
+    <label class="check"><input type="checkbox" id="eArchived"> Skjul ved ny vakt (tidligere vakter beholdes)</label>
+
+    <ul class="errors" id="empErrors" role="alert"></ul>
+    <div class="dialog-actions">
+      <button class="btn danger" type="button" id="deleteEmpBtn" hidden>Slett arbeidsgiver</button>
+      <span class="spacer"></span>
+      <button class="btn" type="button" data-close>Avbryt</button>
+      <button class="btn primary" type="submit">Lagre arbeidsgiver</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Bekreftelse -->
+<dialog id="confirmDialog" aria-labelledby="confirmTitle">
+  <form method="dialog">
+    <h2 id="confirmTitle"></h2>
+    <p id="confirmText"></p>
+    <div class="dialog-actions">
+      <span class="spacer"></span>
+      <button class="btn" value="cancel">Avbryt</button>
+      <button class="btn primary" value="ok" id="confirmOk"></button>
+    </div>
+  </form>
+</dialog>
+
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
-
-<script>
-// Vaktbok – ren logikk (ingen DOM). Brukes av index.html og testene.
-const MIN = 60000, HOUR = 3600000;
-const RULES = { eveStart: 17, eveEnd: 6, minRestH: 11 };
-
-function parseShift(s) {
-  const [y, m, d] = s.date.split('-').map(Number);
-  const [sh, sm] = s.start.split(':').map(Number);
-  const [eh, em] = s.end.split(':').map(Number);
-  const start = new Date(y, m - 1, d, sh, sm);
-  let end = new Date(y, m - 1, d, eh, em);
-  if (end <= start) end = new Date(y, m - 1, d + 1, eh, em); // over midnatt
-  return { start, end };
-}
-
-function calcShift(s, emp, rules = RULES) {
-  const { start, end } = parseShift(s);
-  const gross = (end - start) / MIN;
-  const brk = Math.min(Math.max(Number(s.breakMin) || 0, 0), gross);
-  const worked = gross - brk;
-  let eve = 0, wkd = 0;
-  for (let t = start.getTime(); t < end.getTime(); t += MIN) {
-    const dt = new Date(t), h = dt.getHours(), wd = dt.getDay();
-    if (wd === 0 || wd === 6) wkd++;
-    if (h >= rules.eveStart || h < rules.eveEnd) eve++;
-  }
-  const f = gross ? worked / gross : 0; // pausen trekkes forholdsmessig
-  const hours = worked / 60, eveH = (eve * f) / 60, wkdH = (wkd * f) / 60;
-  const e = emp || {};
-  const pay = hours * (Number(e.rate) || 0) + eveH * (Number(e.eveAdd) || 0) + wkdH * (Number(e.wkdAdd) || 0);
-  return { start, end, hours, eveH, wkdH, pay };
-}
-
-function checkRest(shifts, minRestH = RULES.minRestH) {
-  const list = shifts.map(s => ({ s, ...parseShift(s) })).sort((a, b) => a.start - b.start);
-  const warn = {};
-  let prev = null;
-  for (const cur of list) {
-    if (prev) {
-      const gap = (cur.start - prev.end) / HOUR;
-      if (gap < 0) warn[cur.s.id] = { type: 'overlap', with: prev.s.id, gap };
-      else if (gap < minRestH) warn[cur.s.id] = { type: 'rest', with: prev.s.id, gap };
-    }
-    if (!prev || cur.end > prev.end) prev = cur;
-  }
-  return warn;
-}
-
-function monthSummary(shifts, employers, ym) {
-  const byEmp = {};
-  let total = { hours: 0, eveH: 0, wkdH: 0, pay: 0, count: 0 };
-  for (const s of shifts.filter(x => x.date.startsWith(ym))) {
-    const emp = employers.find(e => e.id === s.employerId);
-    const c = calcShift(s, emp);
-    const k = s.employerId;
-    byEmp[k] = byEmp[k] || { hours: 0, eveH: 0, wkdH: 0, pay: 0, count: 0 };
-    for (const o of [byEmp[k], total]) {
-      o.hours += c.hours; o.eveH += c.eveH; o.wkdH += c.wkdH; o.pay += c.pay; o.count++;
-    }
-  }
-  return { byEmp, total };
-}
-
-function toCSV(shifts, employers, ym) {
-  const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
-  const rows = [['Dato', 'Arbeidsgiver', 'Start', 'Slutt', 'Pause (min)', 'Timer', 'Kveld/natt-timer', 'Helgetimer', 'Estimert lønn', 'Notat']];
-  for (const s of shifts.filter(x => x.date.startsWith(ym)).sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start))) {
-    const emp = employers.find(e => e.id === s.employerId);
-    const c = calcShift(s, emp);
-    rows.push([s.date, emp ? emp.name : '', s.start, s.end, s.breakMin || 0,
-      c.hours.toFixed(2), c.eveH.toFixed(2), c.wkdH.toFixed(2), c.pay.toFixed(0), s.note || '']);
-  }
-  return rows.map(r => r.map(q).join(';')).join('\n');
-}
-
-if (typeof module !== 'undefined') module.exports = { parseShift, calcShift, checkRest, monthSummary, toCSV, RULES };
-
-</script>
-<script>
-const KEY = 'vaktbok-v1';
-const $ = id => document.getElementById(id);
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const kr = n => new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(n);
-const t1 = n => n.toLocaleString('nb-NO', { maximumFractionDigits: 1 });
-const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-const uid = () => Math.random().toString(36).slice(2, 10);
-const DAYS = ['Søn','Man','Tir','Ons','Tor','Fre','Lør'];
-
-let mem = null;
-function load() {
-  try { const raw = localStorage.getItem(KEY); if (raw) return JSON.parse(raw); } catch (e) {}
-  return mem || { employers: [], shifts: [] };
-}
-function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { mem = state; } }
-let state = load();
-let editingShift = null, editingEmp = null;
-let weekStart = mondayOf(new Date());
-
-function mondayOf(d) { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; }
-function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2200); }
-const empById = id => state.employers.find(e => e.id === id);
-
-// Segmenter av en vakt som faller innenfor et gitt døgn (0–24 t), i prosent
-function segmentsForDay(shift, day) {
-  const { start, end } = parseShift(shift);
-  const d0 = new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime(), d1 = d0 + 86400000;
-  const a = Math.max(start.getTime(), d0), b = Math.min(end.getTime(), d1);
-  if (b <= a) return null;
-  return { left: (a - d0) / 864000, width: (b - a) / 864000 };
-}
-function barHTML(shift, day, withLabel) {
-  const seg = segmentsForDay(shift, day); if (!seg) return '';
-  const e = empById(shift.employerId);
-  const label = withLabel ? esc(e ? e.name : '') : '';
-  return `<div class="bar" style="left:${seg.left}%;width:${seg.width}%;background:${esc(e ? e.color : '#888')}" title="${esc(e ? e.name : '')} ${shift.start}–${shift.end}">${label}</div>`;
-}
-
-function renderWeek() {
-  const end = new Date(weekStart); end.setDate(end.getDate() + 6);
-  const wk = weekNumber(weekStart);
-  $('weekTitle').textContent = `Uke ${wk}`;
-  const today = iso(new Date());
-  let html = '';
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(weekStart); d.setDate(d.getDate() + i);
-    const bars = state.shifts.map(s => barHTML(s, d, true)).join('');
-    html += `<div class="d ${iso(d) === today ? 'today' : ''}">${DAYS[d.getDay()]} ${d.getDate()}</div><div class="track">${bars}</div>`;
-  }
-  html += `<div class="ticks"><span>00</span><span>06</span><span>12</span><span>17</span><span>24</span></div>`;
-  $('week').innerHTML = html;
-}
-function weekNumber(d) {
-  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const day = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - day);
-  return Math.ceil(((t - Date.UTC(t.getUTCFullYear(), 0, 1)) / 86400000 + 1) / 7);
-}
-
-function warningText(w) {
-  const other = state.shifts.find(s => s.id === w.with);
-  const oe = other ? empById(other.employerId) : null;
-  const ref = other ? `${oe ? oe.name : 'annen vakt'} ${other.date.slice(8)}.${other.date.slice(5,7)} ${other.start}–${other.end}` : 'en annen vakt';
-  return w.type === 'overlap'
-    ? `Overlapper med ${ref}. Du kan ikke være to steder samtidig.`
-    : `Bare ${t1(w.gap)} t hvile etter ${ref}. Arbeidsmiljøloven krever normalt 11 timer sammenhengende hvile.`;
-}
-
-function renderShifts() {
-  const list = $('shiftList');
-  if (!state.employers.length) {
-    list.innerHTML = `<div class="empty"><p>Start med å legge til en arbeidsgiver, eller prøv appen med eksempeldata.</p><div class="row" style="justify-content:center"><button class="btn primary" onclick="openTab('arbeidsgivere')">Legg til arbeidsgiver</button><button class="btn" onclick="loadDemo()">Last inn eksempeldata</button></div></div>`;
-    return;
-  }
-  if (!state.shifts.length) { list.innerHTML = `<p class="empty muted">Ingen vakter ennå. Registrer den første over.</p>`; return; }
-  const warn = checkRest(state.shifts);
-  const sorted = [...state.shifts].sort((a, b) => (b.date + b.start).localeCompare(a.date + a.start));
-  let html = '', lastMonth = '';
-  for (const s of sorted) {
-    const ym = s.date.slice(0, 7);
-    if (ym !== lastMonth) {
-      const [y, m] = ym.split('-').map(Number);
-      html += `<div class="monthhead">${new Date(y, m - 1, 1).toLocaleDateString('nb-NO', { month: 'long', year: 'numeric' })}</div>`;
-      lastMonth = ym;
-    }
-    const e = empById(s.employerId), c = calcShift(s, e);
-    const d = parseShift(s).start;
-    const overnight = c.end.getDate() !== c.start.getDate();
-    html += `<div class="shift">
-      <div><div class="who"><span class="dot" style="background:${esc(e ? e.color : '#888')}"></span>${esc(e ? e.name : 'Slettet arbeidsgiver')}</div>
-        <div class="small muted">${DAYS[d.getDay()]} ${d.getDate()}.${d.getMonth()+1} · ${s.start}–${s.end}${overnight ? ' (+1 døgn)' : ''}${s.breakMin ? ` · ${s.breakMin} min pause` : ''}${s.note ? ' · ' + esc(s.note) : ''}</div></div>
-      <div class="num">${t1(c.hours)} t<div class="small muted" style="font-weight:400">${kr(c.pay)}</div></div>
-      <div class="track mini">${barHTML(s, d, false)}</div>
-      ${warn[s.id] ? `<div class="flag ${warn[s.id].type}">${esc(warningText(warn[s.id]))}</div>` : ''}
-      <div class="row" style="grid-column:1/-1;margin-top:0">
-        <button class="btn link" onclick="editShift('${s.id}')">Endre</button>
-        <button class="btn link" onclick="duplicateShift('${s.id}')">Kopier til neste dag</button>
-        <button class="btn link" onclick="deleteShift('${s.id}')">Slett</button>
-      </div></div>`;
-  }
-  list.innerHTML = html;
-}
-
-function fillEmpSelect() {
-  $('fEmp').innerHTML = state.employers.map(e => `<option value="${e.id}">${esc(e.name)}</option>`).join('') || '<option value="">Legg til arbeidsgiver først</option>';
-}
-function updatePreview() {
-  const s = { date: $('fDate').value, start: $('fStart').value, end: $('fEnd').value, breakMin: $('fBreak').value };
-  if (!s.date || !s.start || !s.end) { $('preview').textContent = ''; return; }
-  const c = calcShift(s, empById($('fEmp').value));
-  $('preview').textContent = `${t1(c.hours)} timer · ca. ${kr(c.pay)}` + (c.eveH ? ` · ${t1(c.eveH)} t kveld/natt` : '');
-}
-
-$('shiftForm').addEventListener('submit', ev => {
-  ev.preventDefault();
-  if (!state.employers.length) { toast('Legg til en arbeidsgiver først'); openTab('arbeidsgivere'); return; }
-  const s = { id: editingShift || uid(), employerId: $('fEmp').value, date: $('fDate').value, start: $('fStart').value, end: $('fEnd').value, breakMin: Math.max(0, Number($('fBreak').value) || 0), note: $('fNote').value.trim() };
-  if (s.start === s.end) { toast('Start og slutt kan ikke være likt'); return; }
-  if (editingShift) state.shifts = state.shifts.map(x => x.id === s.id ? s : x); else state.shifts.push(s);
-  save(); toast(editingShift ? 'Vakt endret' : 'Vakt lagret');
-  const w = checkRest(state.shifts)[s.id]; if (w) setTimeout(() => toast(w.type === 'overlap' ? 'Obs: vakta overlapper en annen' : 'Obs: kort hviletid før denne vakta'), 2300);
-  resetShiftForm(); weekStart = mondayOf(parseShift(s).start); render();
-});
-function resetShiftForm() {
-  editingShift = null; $('formTitle').textContent = 'Registrer vakt'; $('saveBtn').textContent = 'Lagre vakt'; $('cancelEdit').hidden = true;
-  $('fNote').value = ''; $('fBreak').value = 0; updatePreview();
-}
-$('cancelEdit').onclick = resetShiftForm;
-window.editShift = id => {
-  const s = state.shifts.find(x => x.id === id); if (!s) return;
-  editingShift = id; $('fEmp').value = s.employerId; $('fDate').value = s.date; $('fStart').value = s.start; $('fEnd').value = s.end; $('fBreak').value = s.breakMin || 0; $('fNote').value = s.note || '';
-  $('formTitle').textContent = 'Endre vakt'; $('saveBtn').textContent = 'Lagre endring'; $('cancelEdit').hidden = false;
-  updatePreview(); $('shiftForm').scrollIntoView({ behavior: 'smooth', block: 'center' }); $('fEmp').focus();
-};
-window.duplicateShift = id => {
-  const s = state.shifts.find(x => x.id === id); if (!s) return;
-  const d = parseShift(s).start; d.setDate(d.getDate() + 1);
-  state.shifts.push({ ...s, id: uid(), date: iso(d) }); save(); toast('Vakt kopiert til ' + d.toLocaleDateString('nb-NO')); render();
-};
-window.deleteShift = id => { if (!confirm('Slette denne vakta?')) return; state.shifts = state.shifts.filter(x => x.id !== id); save(); toast('Vakt slettet'); render(); };
-
-// Arbeidsgivere
-$('empForm').addEventListener('submit', ev => {
-  ev.preventDefault();
-  const e = { id: editingEmp || uid(), name: $('eName').value.trim(), rate: Number($('eRate').value) || 0, eveAdd: Number($('eEve').value) || 0, wkdAdd: Number($('eWkd').value) || 0, color: $('eColor').value };
-  if (!e.name) return;
-  if (editingEmp) state.employers = state.employers.map(x => x.id === e.id ? e : x); else state.employers.push(e);
-  save(); toast(editingEmp ? 'Arbeidsgiver endret' : 'Arbeidsgiver lagret'); resetEmpForm(); render();
-});
-function resetEmpForm() { editingEmp = null; $('empForm').reset(); $('eColor').value = '#1F6F6B'; $('empFormTitle').textContent = 'Legg til arbeidsgiver'; $('cancelEmp').hidden = true; }
-$('cancelEmp').onclick = resetEmpForm;
-window.editEmp = id => {
-  const e = empById(id); editingEmp = id;
-  $('eName').value = e.name; $('eRate').value = e.rate; $('eEve').value = e.eveAdd; $('eWkd').value = e.wkdAdd; $('eColor').value = e.color;
-  $('empFormTitle').textContent = 'Endre arbeidsgiver'; $('cancelEmp').hidden = false; $('eName').focus();
-};
-window.deleteEmp = id => {
-  const n = state.shifts.filter(s => s.employerId === id).length;
-  if (!confirm(n ? `Slette arbeidsgiveren og ${n} vakter knyttet til den?` : 'Slette arbeidsgiveren?')) return;
-  state.employers = state.employers.filter(e => e.id !== id); state.shifts = state.shifts.filter(s => s.employerId !== id);
-  save(); toast('Arbeidsgiver slettet'); render();
-};
-function renderEmployers() {
-  $('empList').innerHTML = state.employers.length ? state.employers.map(e => `<div class="shift">
-    <div><div class="who"><span class="dot" style="background:${esc(e.color)}"></span>${esc(e.name)}</div>
-    <div class="small muted">${kr(e.rate)}/t · kveld/natt +${kr(e.eveAdd)} · helg +${kr(e.wkdAdd)}</div></div>
-    <div class="row" style="margin-top:0"><button class="btn link" onclick="editEmp('${e.id}')">Endre</button><button class="btn link" onclick="deleteEmp('${e.id}')">Slett</button></div></div>`).join('')
-    : '<p class="muted">Ingen arbeidsgivere ennå.</p>';
-}
-
-// Måned
-function renderMonth() {
-  const ym = $('mPick').value; if (!ym) return;
-  const { byEmp, total } = monthSummary(state.shifts, state.employers, ym);
-  $('totals').innerHTML = `<div><span class="small muted">Timer</span><b>${t1(total.hours)}</b></div>
-    <div><span class="small muted">Estimert brutto</span><b>${kr(total.pay)}</b></div>
-    <div><span class="small muted">Vakter</span><b>${total.count}</b></div>`;
-  const rows = Object.entries(byEmp).map(([id, v]) => { const e = empById(id);
-    return `<tr><td><span class="who"><span class="dot" style="background:${esc(e ? e.color : '#888')}"></span>${esc(e ? e.name : 'Slettet')}</span></td><td>${v.count}</td><td>${t1(v.hours)}</td><td>${t1(v.eveH)}</td><td>${t1(v.wkdH)}</td><td>${kr(v.pay)}</td></tr>`; }).join('');
-  $('empTable').innerHTML = rows ? `<thead><tr><th>Arbeidsgiver</th><th>Vakter</th><th>Timer</th><th>Kveld/natt</th><th>Helg</th><th>Estimat</th></tr></thead><tbody>${rows}</tbody>` : '<tbody><tr><td class="muted">Ingen vakter denne måneden.</td></tr></tbody>';
-  const warn = checkRest(state.shifts);
-  const items = state.shifts.filter(s => s.date.startsWith(ym) && warn[s.id]).sort((a, b) => a.date.localeCompare(b.date));
-  $('warnList').innerHTML = items.length ? items.map(s => { const e = empById(s.employerId);
-    return `<div class="flag ${warn[s.id].type}" style="margin-bottom:8px"><b>${esc(e ? e.name : '')} ${s.date.slice(8)}.${s.date.slice(5,7)} ${s.start}–${s.end}:</b> ${esc(warningText(warn[s.id]))}</div>`; }).join('')
-    : '<p class="muted" style="margin:0">Ingen brudd på hviletid eller overlappende vakter.</p>';
-}
-$('mPick').addEventListener('change', renderMonth);
-$('csvBtn').onclick = () => {
-  const ym = $('mPick').value, csv = '\ufeff' + toCSV(state.shifts, state.employers, ym);
-  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-  a.download = `vaktbok-${ym}.csv`; document.body.appendChild(a); a.click(); a.remove(); toast('CSV lastet ned');
-};
-$('copyBtn').onclick = async () => {
-  const ym = $('mPick').value;
-  const lines = state.shifts.filter(s => s.date.startsWith(ym)).sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start))
-    .map(s => { const e = empById(s.employerId), c = calcShift(s, e); return `${s.date}  ${s.start}–${s.end}  ${e ? e.name : ''}  ${t1(c.hours)} t${s.breakMin ? ` (pause ${s.breakMin} min)` : ''}`; });
-  try { await navigator.clipboard.writeText(lines.join('\n') || 'Ingen vakter'); toast('Timeliste kopiert'); } catch (e) { toast('Kunne ikke kopiere – nettleseren blokkerte utklippstavla'); }
-};
-
-// Eksempeldata
-window.loadDemo = function () {
-  const mk = (name, rate, eve, wkd, color) => ({ id: uid(), name, rate, eveAdd: eve, wkdAdd: wkd, color });
-  const a = mk('Bemanningsbyrå', 265, 56, 60, '#1F6F6B'), b = mk('Bofellesskap', 248, 52, 55, '#8A4FBF'), c = mk('Fritidsklubb', 210, 0, 40, '#C2571A');
-  const m = mondayOf(new Date()), day = n => { const d = new Date(m); d.setDate(d.getDate() + n); return iso(d); };
-  state = { employers: [a, b, c], shifts: [
-    { id: uid(), employerId: a.id, date: day(0), start: '08:00', end: '15:30', breakMin: 30, note: '' },
-    { id: uid(), employerId: c.id, date: day(1), start: '17:00', end: '22:00', breakMin: 0, note: 'Gamingkveld' },
-    { id: uid(), employerId: b.id, date: day(2), start: '07:00', end: '15:00', breakMin: 30, note: '' },
-    { id: uid(), employerId: b.id, date: day(3), start: '15:00', end: '23:00', breakMin: 30, note: '' },
-    { id: uid(), employerId: a.id, date: day(4), start: '07:00', end: '15:00', breakMin: 30, note: 'Kort hvile!' },
-    { id: uid(), employerId: b.id, date: day(5), start: '22:00', end: '08:00', breakMin: 0, note: 'Våken natt' },
-    { id: uid(), employerId: c.id, date: day(-5), start: '16:00', end: '21:00', breakMin: 0, note: '' },
-    { id: uid(), employerId: a.id, date: day(-3), start: '14:00', end: '22:00', breakMin: 30, note: '' },
-  ]};
-  save(); weekStart = m; toast('Eksempeldata lastet inn'); render(); openTab('vakter');
-};
-$('demoBtn').onclick = () => { if (state.shifts.length && !confirm('Dette erstatter dataene dine. Fortsette?')) return; loadDemo(); };
-$('resetBtn').onclick = () => { if (!confirm('Slette alle vakter og arbeidsgivere?')) return; state = { employers: [], shifts: [] }; save(); toast('Alle data slettet'); render(); };
-
-// Navigasjon
-window.openTab = name => {
-  document.querySelectorAll('nav button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === name));
-  ['vakter', 'maned', 'arbeidsgivere'].forEach(t => $('tab-' + t).hidden = t !== name);
-  if (name === 'maned') renderMonth();
-};
-document.querySelectorAll('nav button').forEach(b => b.onclick = () => openTab(b.dataset.tab));
-$('prevWeek').onclick = () => { weekStart.setDate(weekStart.getDate() - 7); renderWeek(); };
-$('nextWeek').onclick = () => { weekStart.setDate(weekStart.getDate() + 7); renderWeek(); };
-['fEmp', 'fDate', 'fStart', 'fEnd', 'fBreak'].forEach(id => $(id).addEventListener('input', updatePreview));
-
-function render() {
-  const cur = $('fEmp').value; fillEmpSelect(); if (empById(cur)) $('fEmp').value = cur;
-  renderWeek(); renderShifts(); renderEmployers(); if (!$('tab-maned').hidden) renderMonth();
-}
-$('fDate').value = iso(new Date()); $('fStart').value = '08:00'; $('fEnd').value = '16:00';
-$('mPick').value = iso(new Date()).slice(0, 7);
-render(); updatePreview();
-</script>
 </body>
 </html>
