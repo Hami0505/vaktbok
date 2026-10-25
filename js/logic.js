@@ -186,9 +186,31 @@ export function weeklyOverLimit(shifts, employers, limitH = DEFAULT_SETTINGS.wee
   return Object.entries(byWeek).filter(([, h]) => h > limitH).map(([week, hours]) => ({ week, hours }));
 }
 
-// Grov sjekk for personopplysninger i notater (fødselsnummer-lignende tall).
+// Sjekker om et 11-sifret tall er et gyldig norsk fødselsnummer, D-nummer eller H-nummer:
+// gyldig dato (D: dag + 40, H: måned + 40) og riktige kontrollsifre (modulus 11).
+export function isNorwegianId(digits) {
+  if (!/^\d{11}$/.test(digits)) return false;
+  const n = [...digits].map(Number);
+  let day = n[0] * 10 + n[1], month = n[2] * 10 + n[3];
+  if (day > 40) day -= 40;        // D-nummer
+  if (month > 40) month -= 40;    // H-nummer
+  if (day < 1 || day > 31 || month < 1 || month > 12) return false;
+  const yy = n[4] * 10 + n[5];
+  const dt = new Date(2000 + yy, month - 1, day); // år spiller bare inn for 29. februar
+  if (dt.getMonth() !== month - 1 || (dt.getDate() !== day && !(day === 29 && month === 2))) return false;
+  const control = (w, len) => { const r = 11 - (w.reduce((a, x, i) => a + x * n[i], 0) % 11); return r === 11 ? 0 : r; };
+  const k1 = control([3, 7, 6, 1, 8, 9, 4, 5, 2], 9);
+  const k2 = control([5, 4, 3, 2, 7, 6, 5, 4, 3, 2], 10);
+  return k1 !== 10 && k2 !== 10 && k1 === n[9] && k2 === n[10];
+}
+
+// Stopper fødselsnummer i notater. Tåler mellomrom eller punktum etter de seks første sifrene.
 export function noteLooksSensitive(note) {
-  return /\b\d{6}\s?\d{5}\b/.test(String(note || ''));
+  const text = String(note || '');
+  for (const m of text.matchAll(/(?<!\d)(\d{6})[\s.]?(\d{5})(?!\d)/g)) {
+    if (isNorwegianId(m[1] + m[2])) return true;
+  }
+  return false;
 }
 
 // ---------- Validering ----------

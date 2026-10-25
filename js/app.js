@@ -251,7 +251,7 @@ function updatePreview() {
   const hol = L.holidayName(s.date); if (hol) lines.push(`${esc(hol)}`);
   const w = L.checkRest([...others, { ...s, id: tmpId }], D().settings.minRestH)[tmpId];
   if (w) lines.push(`<span class="flag block ${w.type}">${esc(warningText(w))}</span>`);
-  if (L.noteLooksSensitive(s.note)) lines.push(`<span class="flag block overlap">Notatet ser ut til å inneholde et fødselsnummer. Fjern det før du lagrer.</span>`);
+  if (L.noteLooksSensitive(s.note)) lines.push(`<span class="flag block overlap">Notatet inneholder det som ser ut som et fødselsnummer eller D-nummer. Fjern det før du lagrer.</span>`);
   $('preview').innerHTML = lines.join('<br>');
 }
 
@@ -259,7 +259,7 @@ function saveShift(e) {
   e.preventDefault();
   const s = readShiftForm();
   const errs = L.validateShift(s, D().employers);
-  if (L.noteLooksSensitive(s.note)) errs.push('Notatet ser ut til å inneholde et fødselsnummer.');
+  if (L.noteLooksSensitive(s.note)) errs.push('Notatet inneholder et fødselsnummer eller D-nummer. Slike opplysninger skal ikke lagres i Vaktbok.');
   if (errs.length) { $('shiftErrors').innerHTML = errs.map(x => `<li>${esc(x)}</li>`).join(''); return; }
   const saved = store.upsertShift(s);
   $('shiftDialog').close();

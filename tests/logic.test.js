@@ -1,3 +1,5 @@
+// Testene forutsetter norsk tid (sommertid, helligdager). Settes her så det virker på Windows også.
+process.env.TZ = 'Europe/Oslo';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as L from '../js/logic.js';
@@ -142,10 +144,28 @@ test('timeliste for én arbeidsgiver', () => {
   assert.match(t, /21\.10 {2}08:00–16:00/); assert.match(t, /Sum: 7,50 timer \(1 vakter\)/);
 });
 
-test('fødselsnummer i notat oppdages', () => {
-  assert.ok(L.noteLooksSensitive('bruker 01019912345'));
-  assert.ok(L.noteLooksSensitive('010199 12345'));
-  assert.ok(!L.noteLooksSensitive('avd 3, vaktkode N2'));
+// Lager et syntetisk, gyldig nummer fra de ni første sifrene (ingen ekte person).
+function withControl(nine) {
+  const n = [...nine].map(Number);
+  const c = (w) => { const r = 11 - (w.reduce((a, x, i) => a + x * n[i], 0) % 11); return r === 11 ? 0 : r; };
+  const k1 = c([3, 7, 6, 1, 8, 9, 4, 5, 2]); if (k1 === 10) return null; n.push(k1);
+  const k2 = c([5, 4, 3, 2, 7, 6, 5, 4, 3, 2]); if (k2 === 10) return null; n.push(k2);
+  return n.join('');
+}
+const validIds = (prefix) => { for (let i = 100; i < 1000; i++) { const id = withControl(prefix + i); if (id) return id; } };
+
+test('fødselsnummer i notat oppdages med kontrollsifre', () => {
+  const fnr = validIds('150390'), dnr = validIds('550390'), hnr = validIds('154390');
+  assert.ok(L.isNorwegianId(fnr) && L.isNorwegianId(dnr) && L.isNorwegianId(hnr));
+  assert.ok(L.noteLooksSensitive(`bruker ${fnr}`));
+  assert.ok(L.noteLooksSensitive(`${fnr.slice(0, 6)} ${fnr.slice(6)}`));
+  assert.ok(L.noteLooksSensitive(`${fnr.slice(0, 6)}.${fnr.slice(6)}`));
+  const wrong = fnr.slice(0, 10) + ((Number(fnr[10]) + 1) % 10);
+  assert.ok(!L.noteLooksSensitive(wrong), 'feil kontrollsiffer');
+  assert.ok(!L.isNorwegianId('31029012345'), 'ugyldig dato');
+  assert.ok(!L.noteLooksSensitive('ref 12345678901'));
+  assert.ok(!L.noteLooksSensitive('avd 3, vaktkode N2, tlf 98765432'));
+  assert.ok(!L.noteLooksSensitive(`x${fnr}1`), 'del av lengre tall');
 });
 
 test('migrering fra prototypen', () => {

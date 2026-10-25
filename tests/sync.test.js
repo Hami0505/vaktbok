@@ -1,3 +1,5 @@
+// Testene forutsetter norsk tid (sommertid, helligdager). Settes her så det virker på Windows også.
+process.env.TZ = 'Europe/Oslo';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { coalesce, orderOps, mergeRemote } from '../js/sync-core.js';

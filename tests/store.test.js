@@ -1,3 +1,5 @@
+// Testene forutsetter norsk tid (sommertid, helligdager). Settes her så det virker på Windows også.
+process.env.TZ = 'Europe/Oslo';
 // Tester datalaget mot en falsk Supabase-klient i minnet.
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';

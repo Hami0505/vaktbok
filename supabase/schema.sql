@@ -69,7 +69,10 @@ drop policy if exists "egne innstillinger" on public.settings;
 create policy "egne innstillinger" on public.settings for all to authenticated
   using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
 
--- Anonyme brukere skal ikke ha tilgang i det hele tatt.
+-- Tilgang gis eksplisitt, så skjemaet virker også når «Automatically expose new tables» er av.
+-- Innloggede brukere får lese og skrive (RLS over begrenser det til egne rader); anonyme får ingenting.
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on public.employers, public.shifts, public.settings to authenticated;
 revoke all on public.employers, public.shifts, public.settings from anon;
 
 -- ---------- Slett min konto (GDPR art. 17) ----------
