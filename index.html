@@ -51,7 +51,7 @@
     </div>
 
     <ul class="landing-points">
-      <li><b>Riktig lønn med tillegg.</b> Kveld, natt, helg, helligdager og overtid regnes ut fra din egen avtale. Sjekk estimatet mot lønnsslippen.</li>
+      <li><b>Lønn med tillegg, regnet ut for deg.</b> Kveld, natt, helg, helligdager og overtid regnes ut fra din egen avtale. Sjekk estimatet mot lønnsslippen.</li>
       <li><b>Varsel om for kort hviletid.</b> Vaktbok sier fra når det er under 11 timer mellom vaktene, også på tvers av arbeidsgivere.</li>
       <li><b>På mobil og PC.</b> Fungerer uten nett, og synker mellom enhetene når du logger inn. Uten konto lagres alt bare hos deg.</li>
     </ul>
@@ -110,9 +110,10 @@
         </div>
         <div class="seg" role="radiogroup" aria-label="Vis beløp som">
           <button type="button" role="radio" data-pay="gross" aria-checked="true">Brutto</button>
-          <button type="button" role="radio" data-pay="net" aria-checked="false">Netto</button>
+          <button type="button" role="radio" data-pay="net" aria-checked="false">Utbetalt</button>
         </div>
-        <p class="help" id="netHelp" hidden>Du har ikke lagt inn skattetrekk ennå, så netto er lik brutto. Legg inn standard skattetrekk eller frikort under <button class="btn link inline" type="button" data-action="go-settings">Konto → Innstillinger</button>, eller trekk per arbeidsgiver.</p>
+        <p class="help" id="netNote" hidden>Etter skattetrekk. Trekk er et forskudd på skatten, ikke den endelige skatten. Blir det trukket for mye, får du det tilbake i skatteoppgjøret.</p>
+        <p class="help" id="netHelp" hidden>Du har ikke lagt inn skattetrekk ennå, så utbetalt er lik brutto. Legg inn standard skattetrekk eller frikort under <button class="btn link inline" type="button" data-action="go-settings">Konto → Innstillinger</button>, eller trekk per arbeidsgiver.</p>
         <div class="totals" id="totals"></div>
         <p class="small muted" id="kindSplit"></p>
         <div class="scroll"><table id="empTable"></table></div>
@@ -134,7 +135,7 @@
       </section>
       <section class="panel" aria-labelledby="payslipTitle">
         <h2 id="payslipTitle">Sjekk mot lønnsslippen</h2>
-        <p class="small muted">Skriv inn brutto fra lønnsslippen for vaktene denne måneden, så ser du om du har fått riktig betalt.</p>
+        <p class="small muted">Skriv inn brutto fra lønnsslippen for vaktene denne måneden, så ser du om du har fått riktig betalt. Mange får timer og tillegg utbetalt måneden etter, så sammenlign med slippen som gjelder disse vaktene.</p>
         <div id="payslipList"></div>
       </section>
       <section class="panel">
@@ -178,6 +179,8 @@
               <label>Grense (kr)<input type="number" id="sFkLimit" min="0" step="1000" inputmode="numeric" placeholder="100000"></label>
               <label>Inntekt i år utenfor Vaktbok (kr)<input type="number" id="sFkOther" min="0" step="100" inputmode="numeric" placeholder="0" aria-describedby="fkHelp">
                 <span class="help" id="fkHelp">Lønn før du begynte med Vaktbok, og feriepenger som utbetales i år. Begge teller mot frikortet.</span></label>
+              <label class="check span-all"><input type="checkbox" id="sFkNew"> Jeg har bestilt skattekort for inntekt over grensen</label>
+              <label id="sFkNewBox" hidden>Prosent på det nye skattekortet<input type="number" id="sFkNewPct" min="0" max="60" step="0.5" inputmode="decimal"></label>
             </div>
           </fieldset>
         </form>

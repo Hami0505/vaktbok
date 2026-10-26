@@ -184,7 +184,9 @@ export function calcAll(shifts, employers) {
 //  pct:     prosenttrekk fra skattekortet
 //  table:   tabelltrekk, anslått ut fra brutto og trekk på en lønnsslipp
 //  freeOrg: skattefri organisasjon – skattefritt inntil 10 000 kr per år fra denne, ellers skattepliktig fra første krone
-// settings.frikort = { on, limit, otherIncome }: ingen trekk til grensen er nådd, deretter 50 % (som når frikortet er brukt opp).
+// settings.frikort = { on, limit, otherIncome, newCardPct }: ingen trekk til grensen er nådd, deretter 50 %
+// (som når frikortet er brukt opp), eller prosenten på et nytt skattekort hvis brukeren har bestilt det.
+// Tabelltrekk: ingen trekk i juni og halvt trekk i desember. Dette er trekk (forskudd), ikke endelig skatt.
 
 export const FREE_ORG_LIMIT = 10000;
 export const FRIKORT_DEFAULT = 100000;
@@ -221,8 +223,13 @@ export function applyTax(all, shifts, employers, settings = DEFAULT_SETTINGS) {
       const before = used.has(y) ? used.get(y) : Number(fk.otherIncome) || 0;
       const after = before + c.pay;
       used.set(y, after);
-      tax = Math.max(0, after - Math.max(limit, before)) * 0.5;
-    } else tax = c.pay * taxPctFor(e, settings) / 100;
+      const overRate = fk.newCardPct != null && fk.newCardPct !== '' ? Number(fk.newCardPct) / 100 : 0.5;
+      tax = Math.max(0, after - Math.max(limit, before)) * overRate;
+    } else {
+      let pct = taxPctFor(e, settings);
+      if (e?.pay?.tax?.mode === 'table') { const mo = s.date.slice(5, 7); if (mo === '06') pct = 0; else if (mo === '12') pct /= 2; }
+      tax = c.pay * pct / 100;
+    }
     c.tax = tax; c.net = c.pay - tax; c.taxFree = freeOrg;
   }
   return all;
@@ -272,7 +279,8 @@ export function restWarnings(shifts, employers, minRestH) {
   const w = checkRest(shifts, minRestH);
   const byId = new Map(shifts.map(s => [s.id, s]));
   for (const [id, x] of Object.entries(w)) {
-    if (x.type === 'rest' && (!countsForWarnings(byId.get(id), employers) || !countsForWarnings(byId.get(x.with), employers))) delete w[id];
+    if (x.type === 'rest' && (!countsForWarnings(byId.get(id), employers) || !countsForWarnings(byId.get(x.with), employers))) { delete w[id]; continue; }
+    x.sameEmployer = byId.get(id)?.employerId === byId.get(x.with)?.employerId;
   }
   return w;
 }

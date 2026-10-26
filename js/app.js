@@ -34,7 +34,7 @@ const showNet = () => D().settings.showNet === true;
 // Har brukeren lagt inn noe som gir skattetrekk? Ellers er netto lik brutto, og vi sier fra.
 const hasTaxSetup = () => taxPct() > 0 || D().settings.frikort?.on || D().employers.some(e => e.pay?.tax && e.pay.tax.mode !== 'default');
 const money = o => showNet() ? (o.net ?? o.pay) : o.pay;
-const payWord = () => showNet() ? 'ca. netto' : 'estimert brutto';
+const payWord = () => showNet() ? 'ca. utbetalt' : 'estimert brutto';
 
 // Gjør tekniske feilmeldinger (ofte på engelsk fra serveren) om til noe brukeren forstår.
 function friendlyError(e) {
@@ -103,8 +103,11 @@ function warningText(w) {
   const emp = other && empById(other.employerId);
   const where = other ? `${emp ? emp.name : 'en vakt'} ${fmtDay(other.date)} ${other.start}–${other.end}` : 'en annen vakt';
   if (w.type === 'overlap') return `Overlapper med ${where}.`;
-  if (w.gap < 0.05) return `Starter rett etter ${where}, uten hvile. Arbeidsmiljøloven krever normalt minst ${num(D().settings.minRestH, 0)} timer.`;
-  return `Bare ${num(w.gap)} timer hvile etter ${where}. Arbeidsmiljøloven krever normalt minst ${num(D().settings.minRestH, 0)} timer.`;
+  const law = w.sameEmployer
+    ? `Arbeidsmiljøloven krever normalt minst ${num(D().settings.minRestH, 0)} timer hvile hos samme arbeidsgiver.`
+    : 'Vaktene er hos ulike arbeidsgivere. Loven gjelder per arbeidsgiver, men kort hvile er en belastning uansett.';
+  if (w.gap < 0.05) return `Starter rett etter ${where}, uten hvile. ${law}`;
+  return `Bare ${num(w.gap)} timer hvile etter ${where}. ${law}`;
 }
 
 // ---------- Faner ----------
@@ -140,6 +143,10 @@ function renderSync() {
 
 function renderBanners() {
   const out = [];
+  if (!store.user && D().shifts.length && !localStorage.getItem('vaktbok:guest-warned')) {
+    out.push(`<div class="banner"><p>Uten konto ligger vaktene bare i denne nettleseren, og de kan bli slettet, for eksempel av Safari på iPhone etter sju dager uten bruk. ${store.configured ? 'Logg inn for å ta vare på dem.' : 'Last ned en kopi under Konto jevnlig.'}</p>
+      ${store.configured ? '<button class="btn primary" data-action="go-login-banner">Logg inn</button>' : ''}<button class="btn link" data-action="dismiss-guest">Skjønner</button></div>`);
+  }
   let v1 = null;
   try { v1 = !localStorage.getItem(V1_DONE) && JSON.parse(localStorage.getItem(V1_KEY) || 'null'); } catch { }
   if (v1 && (v1.shifts?.length || v1.employers?.length)) {
@@ -202,7 +209,7 @@ function renderWeek() {
   }
   const over = L.weeklyOverLimit(D().shifts, D().employers, D().settings.weekLimitH)
     .find(x => x.week === `${L.isoWeek(ws).year}-U${L.pad(week)}`);
-  $('weekList').innerHTML = (over ? `<div class="flag weekly">Du har ${hrs(over.hours)} denne uka, over grensen på ${num(D().settings.weekLimitH, 0)} timer.</div>` : '')
+  $('weekList').innerHTML = (over ? `<div class="flag weekly">Du har ${hrs(over.hours)} denne uka hos alle arbeidsgiverne til sammen, over grensen din på ${num(D().settings.weekLimitH, 0)} timer. Arbeidsmiljøloven gjelder per arbeidsgiver, så dette varselet er for din egen del.</div>` : '')
     + (inWeek.length ? inWeek.map(s => shiftItem(s, warns[s.id], true)).join('') : '<div class="empty"><p>Ingen vakter denne uka.</p></div>');
 }
 
@@ -575,7 +582,7 @@ function toggleTax() {
   $('eTaxHelp').textContent = {
     default: `Bruker standard skattetrekk fra Konto (${num(taxPct(), 1)} %)${D().settings.frikort?.on ? ', eller frikortet så lenge det rekker' : ''}.`,
     pct: 'Står på skattekortet ditt. Arbeidsgivere som ikke er hovedarbeidsgiver, bruker vanligvis prosenttrekk.',
-    table: g > 0 && t >= 0 && t < g ? `Tilsvarer ca. ${num(t / g * 100, 1)} % trekk. Bruk en vanlig lønnsslipp, uten feriepenger eller etterbetaling.` : 'Hovedarbeidsgiveren bruker vanligvis tabelltrekk. Skriv inn brutto og trekk fra en vanlig lønnsslipp, så anslår Vaktbok trekket.',
+    table: g > 0 && t >= 0 && t < g ? `Tilsvarer ca. ${num(t / g * 100, 1)} % trekk. Bruk en vanlig lønnsslipp, uten feriepenger eller etterbetaling. Vaktbok regner som vanlig ingen trekk i juni og halvt trekk i desember.` : 'Hovedarbeidsgiveren bruker vanligvis tabelltrekk. Skriv inn brutto og trekk fra en vanlig lønnsslipp, så anslår Vaktbok trekket.',
     freeOrg: 'Inntil 10 000 kr i året fra en skattefri organisasjon er skattefritt. Går du over, blir hele beløpet skattepliktig, ikke bare det som er over.',
   }[m];
 }
@@ -633,7 +640,7 @@ function renderMonth() {
   if (!ids.length) {
     $('empTable').innerHTML = '<tbody><tr><td class="empty" colspan="6">Ingen vakter denne måneden.</td></tr></tbody>';
   } else {
-    $('empTable').innerHTML = `<thead><tr><th>Arbeidsgiver</th><th>Vakter</th><th>Timer</th><th>Tillegg</th><th>Overtid</th><th>${showNet() ? 'Ca. netto' : 'Estimert'}</th></tr></thead><tbody>`
+    $('empTable').innerHTML = `<thead><tr><th>Arbeidsgiver</th><th>Vakter</th><th>Timer</th><th>Tillegg</th><th>Overtid</th><th>${showNet() ? 'Ca. utbetalt' : 'Estimert'}</th></tr></thead><tbody>`
       + ids.map(id => {
         const e = empById(id), o = byEmp[id];
         const subs = Object.values(o.supplements).filter(x => x.hours > 0).map(x => `${esc(x.label)} ${hrs(x.hours)}`).join(', ');
@@ -665,6 +672,7 @@ function renderPaySeg() {
   const net = D().settings.showNet === true;
   document.querySelectorAll('.seg [data-pay]').forEach(b => b.setAttribute('aria-checked', String((b.dataset.pay === 'net') === net)));
   $('netHelp').hidden = !(net && !hasTaxSetup());
+  $('netNote').hidden = !(net && hasTaxSetup());
 }
 
 function yearInfoText(m, i) {
@@ -687,8 +695,14 @@ function renderFrikort(year) {
   $('fkText').innerHTML = `<b>${kr(st.earned)}</b> av ${kr(st.limit)} brukt. ${st.planned ? `Planlagte vakter resten av året: ${kr(st.planned)}.` : ''} ${st.left ? `Igjen: <b>${kr(st.left)}</b>.` : ''}`;
   const w = $('fkWarn');
   let msg = '', cls = 'rest';
-  if (st.earned > st.limit) { msg = `Du har passert grensen med ${kr(st.earned - st.limit)}. Uten skattekort trekker arbeidsgiveren 50 % av det som er over. Bestill skattekort på skatteetaten.no.`; cls = 'overlap'; }
-  else if (st.overBy > 0) msg = `Med vaktene du har planlagt, går du over grensen med ca. ${kr(st.overBy)}. Bestill skattekort på skatteetaten.no før du når den, så slipper du 50 % trekk.`;
+  const newCard = D().settings.frikort?.newCardPct != null;
+  if (st.earned > st.limit) {
+    msg = newCard ? `Du har passert grensen med ${kr(st.earned - st.limit)}. Arbeidsgiverne trekker nå etter det nye skattekortet ditt.`
+      : `Du har passert grensen med ${kr(st.earned - st.limit)}. Uten skattekort trekker arbeidsgiveren 50 % av det som er over. Det er trekk, ikke endelig skatt, så for mye trukket får du tilbake i skatteoppgjøret. Bestill skattekort på skatteetaten.no, og huk av for det under Konto.`;
+    cls = newCard ? 'rest' : 'overlap';
+  }
+  else if (st.overBy > 0) msg = newCard ? `Med vaktene du har planlagt, går du over grensen med ca. ${kr(st.overBy)}. Det nye skattekortet ditt brukes da.`
+    : `Med vaktene du har planlagt, går du over grensen med ca. ${kr(st.overBy)}. Bestill skattekort på skatteetaten.no før du når den, så slipper du 50 % trekk.`;
   else if (st.earned >= st.limit * 0.8) msg = 'Du har brukt over 80 % av frikortet. Følg med, og bestill skattekort hvis du kommer til å tjene mer.';
   w.hidden = !msg; w.className = `flag block ${cls}`; w.textContent = msg;
 }
@@ -711,7 +725,7 @@ function renderYear(y) {
   const cur = months.findIndex(m => m.ym === ui.month);
   $('yearInfo').innerHTML = cur >= 0 ? yearInfoText(months[cur], cur) : '';
   const ids = Object.keys(byEmp);
-  $('yearTable').innerHTML = ids.length ? `<thead><tr><th>Arbeidsgiver</th><th>Vakter</th><th>Timer</th><th>${showNet() ? 'Ca. netto' : 'Estimert'}</th></tr></thead><tbody>`
+  $('yearTable').innerHTML = ids.length ? `<thead><tr><th>Arbeidsgiver</th><th>Vakter</th><th>Timer</th><th>${showNet() ? 'Ca. utbetalt' : 'Estimert'}</th></tr></thead><tbody>`
     + ids.map(id => { const e = empById(id), o = byEmp[id];
       return `<tr><td><span class="cell-who"><span class="dot" style="background:${safeColor(e?.color)}"></span>${esc(e?.name || 'Ukjent')}</span></td><td>${o.count}</td><td>${hrs(o.hours)}</td><td>${L.payType(e) === 'volunteer' && !o.pay ? 'Frivillig' : kr(money(o))}</td></tr>`; }).join('')
     + '</tbody>' : '';
@@ -806,6 +820,9 @@ function renderAccount() {
   $('sFkFields').hidden = !s.frikort?.on;
   $('sFkLimit').value = s.frikort?.limit ?? L.FRIKORT_DEFAULT;
   $('sFkOther').value = s.frikort?.otherIncome || '';
+  $('sFkNew').checked = s.frikort?.newCardPct != null;
+  $('sFkNewPct').value = s.frikort?.newCardPct ?? '';
+  $('sFkNewBox').hidden = !$('sFkNew').checked;
   $('dataNote').textContent = store.user
     ? 'Dataene dine lagres på server i EU og synkes til enhetene der du er logget inn. Du kan laste ned eller slette alt når som helst.'
     : 'Alt lagres i denne nettleseren. Sletter du nettleserdata, forsvinner vaktene. Last ned en kopi jevnlig.';
@@ -858,6 +875,8 @@ function render() {
 }
 
 const actions = {
+  'go-login-banner': () => { setTab('konto'); $('emailInput')?.focus(); },
+  'dismiss-guest': () => { localStorage.setItem('vaktbok:guest-warned', '1'); renderBanners(); },
   'edit-name': () => openNameDialog(false),
   'go-login': () => { $('importDialog').close(); setTab('konto'); $('emailInput')?.focus(); },
   'go-settings': () => { setTab('konto'); $('sTax').focus(); },
@@ -1060,7 +1079,8 @@ $('sheetBtn').addEventListener('click', async () => {
 
 $('settingsForm').addEventListener('change', () => {
   $('sFkFields').hidden = !$('sFkOn').checked;
-  const f = { rest: $('sRest'), week: $('sWeek'), tax: $('sTax'), fkLimit: $('sFkLimit'), fkOther: $('sFkOther') };
+  $('sFkNewBox').hidden = !$('sFkNew').checked;
+  const f = { rest: $('sRest'), week: $('sWeek'), tax: $('sTax'), fkLimit: $('sFkLimit'), fkOther: $('sFkOther'), fkNewPct: $('sFkNewPct') };
   const rest = Number(f.rest.value), week = Number(f.week.value), tax = f.tax.value === '' ? 0 : Number(f.tax.value);
   const errs = [];
   const check = (el, ok, msg) => { el.setAttribute('aria-invalid', String(!ok)); if (!ok) errs.push(msg); };
@@ -1071,11 +1091,13 @@ $('settingsForm').addEventListener('change', () => {
   if (fkOn) {
     check(f.fkLimit, fkLimit >= 1000 && fkLimit <= 1000000, 'Frikortgrensen må være mellom 1 000 og 1 000 000 kr. For 2026 er den 100 000 kr.');
     check(f.fkOther, fkOther >= 0 && fkOther <= 10000000, 'Inntekt utenfor Vaktbok må være 0 kr eller mer.');
+    if ($('sFkNew').checked) check(f.fkNewPct, f.fkNewPct.value !== '' && Number(f.fkNewPct.value) >= 0 && Number(f.fkNewPct.value) <= 60, 'Skriv inn prosenten fra det nye skattekortet (0–60 %).');
   }
+  const fkNewPct = fkOn && $('sFkNew').checked && f.fkNewPct.value !== '' ? Number(f.fkNewPct.value) : null;
   $('settingsErrors').innerHTML = errs.map(x => `<li>${esc(x)}</li>`).join('');
   if (errs.length) return;
   store.updateSettings({ holidayPayPct: Number($('sHoliday').value), minRestH: rest, weekLimitH: week, taxPct: tax,
-    frikort: fkOn ? { on: true, limit: fkLimit, otherIncome: fkOther } : (D().settings.frikort ? { ...D().settings.frikort, on: false } : null) });
+    frikort: fkOn ? { on: true, limit: fkLimit, otherIncome: fkOther, newCardPct: fkNewPct } : (D().settings.frikort ? { ...D().settings.frikort, on: false } : null) });
   toast('Innstillingene er lagret');
 });
 
@@ -1184,3 +1206,5 @@ store.init().then(() => {
   render();
 });
 registerSW();
+// Be nettleseren om å ikke rydde bort lokale data (virker i de fleste nettlesere, særlig når appen er installert).
+try { navigator.storage?.persist?.(); } catch { }

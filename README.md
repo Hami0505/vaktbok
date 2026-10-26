@@ -21,10 +21,10 @@ Videreutviklingen er gjort på samme måte som innleveringen: jeg beskrev behov 
 - **Norske helligdager** regnes ut automatisk, inkludert påske og pinse.
 - **Overtid** per dag og/eller per uke, per arbeidsgiver, slik arbeidsmiljøloven regner det.
 - **Timelønn, honorar eller frivillig** per arbeidsgiver. Honorar føres per oppdrag med et vanlig beløp som forslag, og viser hva det tilsvarer per time. Enhver vakt kan også få et avtalt fast beløp. Frivillig arbeid føres uten lønn, og kan holdes utenfor varsler om hviletid.
-- **Feriepenger** (10,2 % eller 12 %), og valg mellom brutto og netto i oversiktene.
+- **Feriepenger** (10,2 % eller 12 %), og valg mellom brutto og utbetalt (etter skattetrekk) i oversiktene. Trekk er forskudd på skatten, ikke endelig skatt.
 - **Skatt per arbeidsgiver:** standard trekk, prosenttrekk, tabelltrekk (anslått fra en lønnsslipp) eller skattefri organisasjon (inntil 10 000 kr i året).
-- **Frikort:** grense, inntekt utenfor Vaktbok, hvor mye som er brukt og hva planlagte vakter gir, med varsel før du går over.
-- **Varsler** ved for kort hviletid (11 timer, justerbart), overlappende vakter og når samlet arbeidstid i en uke passerer en grense.
+- **Frikort:** grense, inntekt utenfor Vaktbok, valg for bestilt skattekort, hvor mye som er brukt og hva planlagte vakter gir, med varsel før du går over.
+- **Varsler** ved for kort hviletid (11 timer, justerbart), overlappende vakter og når samlet arbeidstid i en uke passerer en grense. Arbeidsmiljøloven gjelder per arbeidsgiver, så varsler på tvers av arbeidsgivere er for brukerens egen del, og appen sier det.
 - **Oversikt** over måned og år per arbeidsgiver, med diagram over året. Hold over eller trykk på en måned for å se tallene og åpne den. Regneark (CSV for Excel), kalenderfil (.ics), timeliste til utklippstavlen og timeliste som PDF med signaturfelt.
 - **Importer vakter** fra kalenderlenke (iPhone og iCloud, Google, Outlook, byråets vaktplan), kalenderfil (.ics), regneark (.csv) eller sikkerhetskopi. Hendelsene samles etter navn, så du krysser av for hva som er vakter og kobler hver gruppe til en arbeidsgiver (eller oppretter en ny). Gjentakende hendelser blir enkeltvakter, du kan velge bort enkeltvakter, setter standardpause, og dubletter hoppes over. Lagrede kalenderlenker husker valgene og kan hentes på nytt med ett trykk.
 - **Sjekk mot lønnsslippen:** skriv inn utbetalt brutto og se om det stemmer med estimatet.
@@ -50,7 +50,7 @@ Ren HTML, CSS og JavaScript-moduler. Ingen build-steg, så appen ligger rett på
 | `js/config.js` | Supabase-nøkler og kontaktadresse (offentlige verdier, tilgang styres av RLS) |
 | `supabase/schema.sql` | Tabeller, tilganger, Row Level Security, sanntid og sletting av konto |
 | `sw.js` | Service worker for offline-bruk |
-| `tests/` | 60 automatiske tester, kjøres på hver push via GitHub Actions |
+| `tests/` | 63 automatiske tester, kjøres på hver push via GitHub Actions |
 
 Lagring er lokal først: alle endringer lagres i nettleseren med en gang og legges i en utboks. Når brukeren er innlogget og på nett, sendes utboksen til Supabase og serverdata hentes inn. Andre enheter får beskjed i sanntid. Serveren er fasit, unntatt for endringer som ennå ikke er sendt.
 

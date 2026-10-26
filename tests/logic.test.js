@@ -511,3 +511,25 @@ test('validering av skatt', () => {
   assert.ok(L.validateEmployer({ ...emp, pay: { type: 'hourly', tax: { mode: 'table', slipGross: 1000, slipTax: 2000 } } }).length);
   assert.deepEqual(L.validateEmployer({ ...emp, pay: { type: 'hourly', tax: { mode: 'table', slipGross: 20000, slipTax: 5000 } } }), []);
 });
+
+test('tabelltrekk: ingen trekk i juni, halvt i desember', () => {
+  const tab = { ...emp, id: 't', rules: [], pay: { type: 'hourly', tax: { mode: 'table', slipGross: 10000, slipTax: 3000 } } };
+  const sh = ['05', '06', '12'].map(m => S({ employerId: 't', date: `2026-${m}-04`, start: '08:00', end: '13:00' }));
+  const all = L.calcAllNet(sh, [tab], {});
+  assert.deepEqual(sh.map(s => all.get(s.id).tax), [300, 0, 150]);
+});
+
+test('frikort med bestilt skattekort: prosenten på kortet etter grensen, ikke 50 %', () => {
+  const fee = { id: 'f', name: 'Jobb', rate: 0, rules: [], pay: { type: 'fee', feeDefault: 60000 } };
+  const sh = [1, 2].map(m => S({ employerId: 'f', date: `2026-0${m}-10`, start: '08:00', end: '16:00' }));
+  const all = L.calcAllNet(sh, [fee], { frikort: { on: true, limit: 100000, otherIncome: 0, newCardPct: 10 } });
+  assert.deepEqual(sh.map(s => all.get(s.id).tax), [0, 2000]);
+});
+
+test('hviletidsvarsel sier om vaktene er hos samme arbeidsgiver', () => {
+  const a = S({ id: 'a', date: '2026-10-20', start: '14:00', end: '22:00' });
+  const b = S({ id: 'b', date: '2026-10-21', start: '06:00', end: '14:00' });
+  const c = S({ id: 'c', employerId: 'e2', date: '2026-10-21', start: '06:00', end: '14:00' });
+  assert.equal(L.restWarnings([a, b], [emp, emp2], 11).b.sameEmployer, true);
+  assert.equal(L.restWarnings([a, c], [emp, emp2], 11).c.sameEmployer, false);
+});
