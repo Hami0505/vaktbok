@@ -2,7 +2,7 @@
 
 **Åpne appen:** https://hami0505.github.io/Vaktbok-prototype/
 
-Vakter fra alle arbeidsgivere på ett sted: timer, lønnsestimat, tillegg og varsel om for kort hviletid. Laget for folk i helse, omsorg og barnevern som tar vakter hos flere arbeidsgivere og via bemanningsbyråer.
+Vakter fra alle arbeidsgivere på ett sted: timer, lønnsestimat, tillegg og varsel om for kort hviletid. Laget for alle som tar vakter hos flere arbeidsgivere eller via vikar- og bemanningsbyråer, for eksempel i helse, butikk, restaurant, lager og hotell.
 
 ## Bakgrunn: fra innlevering til app
 

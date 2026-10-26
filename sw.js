@@ -1,6 +1,6 @@
 // Vaktbok – service worker: gjør appen tilgjengelig offline.
 // Øk VERSION ved hver utgivelse, så får brukerne beskjed om ny versjon.
-const VERSION = 'vaktbok-2026-10-26-5';
+const VERSION = 'vaktbok-2026-10-26-7';
 const SHELL = [
   './', 'index.html', 'personvern.html', 'css/app.css',
   'js/app.js', 'js/logic.js', 'js/store.js', 'js/sync-core.js', 'js/demo.js', 'js/personvern.js', 'js/config.js',
@@ -33,16 +33,18 @@ self.addEventListener('fetch', e => {
   const isStatic = sameOrigin || url.hostname === 'cdn.jsdelivr.net';
   if (!isStatic) return;
 
-  if (req.mode === 'navigate') {
-    // Nettverk først for selve siden, så innloggingslenker og nye versjoner fungerer; reserve fra cache offline.
-    e.respondWith(fetch(req).catch(async () => (await caches.match(req, { ignoreSearch: true })) || caches.match('index.html')));
-    return;
-  }
-  // Cache først for statiske filer; oppdateres i bakgrunnen.
+  // Nettverk først for alt: på nett får brukeren alltid nyeste filer (også nye nøkler i config.js).
+  // Uten nett brukes de lagrede filene, så appen fortsatt virker offline.
   e.respondWith((async () => {
     const cache = await caches.open(VERSION);
-    const hit = await cache.match(req);
-    const net = fetch(req).then(res => { if (res.ok || res.type === 'opaque') cache.put(req, res.clone()); return res; }).catch(() => hit);
-    return hit || net;
+    try {
+      // no-cache: spør serveren om filen er endret (billig sjekk), i stedet for å stole på nettleserens mellomlager.
+      const res = await fetch(req, sameOrigin ? { cache: 'no-cache' } : undefined);
+      if (res.ok || res.type === 'opaque') cache.put(req, res.clone());
+      return res;
+    } catch {
+      const hit = await cache.match(req, { ignoreSearch: req.mode === 'navigate' });
+      return hit || (req.mode === 'navigate' ? cache.match('index.html') : Response.error());
+    }
   })());
 });
