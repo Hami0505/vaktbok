@@ -1,0 +1,31 @@
+name: Hold databasen aktiv
+# Gratisprosjekter hos Supabase settes på pause etter en uke uten aktivitet.
+# Denne jobben kaller en liten databasefunksjon hvert tredje døgn.
+# Feiler den (for eksempel fordi prosjektet likevel er satt på pause), sender GitHub deg en e-post.
+on:
+  schedule:
+    - cron: '17 6 */3 * *'   # kl. 06:17 UTC hvert tredje døgn
+  workflow_dispatch:          # kan også kjøres for hånd under Actions
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Kall keepalive i Supabase
+        run: |
+          node --input-type=module -e "
+            const { config } = await import('./js/config.js');
+            if (!config.supabaseUrl || !config.supabaseAnonKey) { console.log('Supabase er ikke satt opp, hopper over.'); process.exit(0); }
+            const res = await fetch(config.supabaseUrl + '/rest/v1/rpc/keepalive', {
+              method: 'POST',
+              headers: { apikey: config.supabaseAnonKey, 'Content-Type': 'application/json' },
+              body: '{}',
+            });
+            const text = await res.text();
+            console.log(res.status, text);
+            if (!res.ok) { console.error('Databasen svarte ikke som forventet. Sjekk om prosjektet er satt på pause i Supabase.'); process.exit(1); }
+          "

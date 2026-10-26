@@ -99,7 +99,7 @@ Sendes e-postene fra en Gmail-adresse, kan de havne i søppelpost. Et eget domen
 - [x] Egen SMTP
 - [x] Personvernerklæring (`personvern.html`)
 - [ ] Databehandleravtale (DPA) med Supabase og Brevo
-- [ ] Sjekk abonnementet hos Supabase (pause ved inaktivitet, sikkerhetskopier)
+- [ ] Sjekk abonnementet hos Supabase. Gratisprosjekter settes på pause etter en uke uten aktivitet; `.github/workflows/keepalive.yml` pinger databasen hvert tredje døgn for å unngå det, men bare Pro er sikkert og gir sikkerhetskopier.
 - [ ] Eget domene (valgfritt), med oppdatert Site URL i Supabase
 - [ ] Øk `VERSION` i `sw.js` ved hver utgivelse, så brukerne får beskjed om ny versjon
 

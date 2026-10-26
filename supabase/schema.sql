@@ -98,3 +98,11 @@ begin
     end;
   end loop;
 end $$;
+
+-- ---------- Holde gratisprosjektet aktivt ----------
+-- Kalles av GitHub Actions (.github/workflows/keepalive.yml) hvert tredje døgn.
+-- Gjør en ekte databasespørring, men leser ingen brukerdata.
+create or replace function public.keepalive() returns timestamptz
+language sql stable set search_path = '' as $$ select now() $$;
+revoke all on function public.keepalive() from public;
+grant execute on function public.keepalive() to anon, authenticated;
