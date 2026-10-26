@@ -98,55 +98,80 @@
 
     <!-- OVERSIKT: måned, år, lønnsslipp og varsler -->
     <div id="v-oversikt" role="tabpanel" aria-labelledby="t-oversikt" hidden>
+      <div class="ov-bar">
+        <div class="seg" role="radiogroup" aria-label="Periode">
+          <button type="button" role="radio" data-view="month" aria-checked="true">Måned</button>
+          <button type="button" role="radio" data-view="year" aria-checked="false">År</button>
+        </div>
+        <div class="seg" role="radiogroup" aria-label="Vis beløp som">
+          <button type="button" role="radio" data-pay="gross" aria-checked="true">Brutto</button>
+          <button type="button" role="radio" data-pay="net" aria-checked="false">Utbetalt</button>
+        </div>
+      </div>
+      <p class="help" id="netNote" hidden>Etter skattetrekk. Trekk er et forskudd på skatten, ikke den endelige skatten. Blir det trukket for mye, får du det tilbake i skatteoppgjøret.</p>
+      <p class="help" id="netHelp" hidden>Du har ikke lagt inn skattetrekk ennå, så utbetalt er lik brutto. Legg inn standard skattetrekk eller frikort under <button class="btn link inline" type="button" data-action="go-settings">Konto → Innstillinger</button>, eller trekk per arbeidsgiver.</p>
+
       <section class="panel frikort-panel" id="frikortPanel" hidden aria-labelledby="fkTitle">
         <h2 id="fkTitle">Frikort</h2>
         <div class="fk-bar" role="img" id="fkBar"><span class="fk-used"></span><span class="fk-planned"></span></div>
         <p id="fkText"></p>
         <p class="flag block" id="fkWarn" hidden></p>
       </section>
-      <section class="panel">
-        <div class="weeknav">
-          <div class="weekhead"><h2 id="monthTitle"></h2></div>
-          <div class="arrows">
-            <button class="icon-btn" id="prevMonth" type="button" aria-label="Forrige måned">‹</button>
-            <button class="icon-btn" id="nextMonth" type="button" aria-label="Neste måned">›</button>
+
+      <!-- MÅNED -->
+      <div id="ovMonth">
+        <section class="panel">
+          <div class="weeknav">
+            <div class="weekhead"><h2 id="monthTitle"></h2></div>
+            <div class="arrows">
+              <button class="icon-btn" id="prevMonth" type="button" aria-label="Forrige måned">‹</button>
+              <button class="icon-btn" id="nextMonth" type="button" aria-label="Neste måned">›</button>
+            </div>
           </div>
-        </div>
-        <div class="seg" role="radiogroup" aria-label="Vis beløp som">
-          <button type="button" role="radio" data-pay="gross" aria-checked="true">Brutto</button>
-          <button type="button" role="radio" data-pay="net" aria-checked="false">Utbetalt</button>
-        </div>
-        <p class="help" id="netNote" hidden>Etter skattetrekk. Trekk er et forskudd på skatten, ikke den endelige skatten. Blir det trukket for mye, får du det tilbake i skatteoppgjøret.</p>
-        <p class="help" id="netHelp" hidden>Du har ikke lagt inn skattetrekk ennå, så utbetalt er lik brutto. Legg inn standard skattetrekk eller frikort under <button class="btn link inline" type="button" data-action="go-settings">Konto → Innstillinger</button>, eller trekk per arbeidsgiver.</p>
-        <div class="totals" id="totals"></div>
-        <p class="small muted" id="kindSplit"></p>
-        <div class="scroll"><table id="empTable"></table></div>
-        <p class="small muted">Estimat. Tillegg, overtid, feriepenger og skatt regnes etter reglene du har lagt inn. Sjekk alltid mot lønnsslippen.</p>
-        <h3 class="subhead">Eksporter</h3>
-        <div class="row exports">
-          <button class="btn" id="csvBtn" type="button">Last ned regneark (CSV)</button>
-          <button class="btn" id="icsBtn" type="button">Legg i kalenderen (.ics)</button>
-          <select id="sheetEmp" class="inline-select" aria-label="Timeliste for"></select>
-          <button class="btn" id="sheetBtn" type="button">Kopier timeliste</button>
-          <button class="btn" id="pdfBtn" type="button">Timeliste som PDF</button>
-        </div>
-      </section>
-      <section class="panel" aria-labelledby="yearTitle">
-        <h2 id="yearTitle"></h2>
-        <div class="totals" id="yearTotals"></div>
-        <div class="yearchart" id="yearChart"></div>
-        <p class="yearinfo" id="yearInfo" aria-live="polite"></p>
-        <div class="scroll"><table id="yearTable"></table></div>
-      </section>
-      <section class="panel" aria-labelledby="payslipTitle">
-        <h2 id="payslipTitle">Sjekk mot lønnsslippen</h2>
-        <p class="small muted">Skriv inn brutto fra lønnsslippen for vaktene denne måneden, så ser du om du har fått riktig betalt. Mange får timer og tillegg utbetalt måneden etter, så sammenlign med slippen som gjelder disse vaktene.</p>
-        <div id="payslipList"></div>
-      </section>
-      <section class="panel">
-        <h2>Varsler denne måneden</h2>
-        <div id="warnList"></div>
-      </section>
+          <div class="totals" id="totals"></div>
+          <p class="small muted" id="kindSplit"></p>
+          <div class="scroll"><table id="empTable"></table></div>
+          <p class="small muted">Estimat. Tillegg, overtid, feriepenger og skatt regnes etter reglene du har lagt inn. Sjekk alltid mot lønnsslippen.</p>
+        </section>
+        <section class="panel" id="warnPanel">
+          <h2>Varsler denne måneden</h2>
+          <div id="warnList"></div>
+        </section>
+        <section class="panel" aria-labelledby="payslipTitle">
+          <h2 id="payslipTitle">Sjekk mot lønnsslippen</h2>
+          <p class="small muted">Skriv inn brutto fra lønnsslippen for vaktene denne måneden, så ser du om du har fått riktig betalt. Mange får timer og tillegg utbetalt måneden etter, så sammenlign med slippen som gjelder disse vaktene.</p>
+          <div id="payslipList"></div>
+        </section>
+        <section class="panel">
+          <h2>Eksporter og timelister</h2>
+          <div class="row exports">
+            <button class="btn" id="csvBtn" type="button">Last ned regneark (CSV)</button>
+            <button class="btn" id="icsBtn" type="button">Legg i kalenderen (.ics)</button>
+          </div>
+          <div class="row exports">
+            <select id="sheetEmp" class="inline-select" aria-label="Timeliste for"></select>
+            <button class="btn" id="sheetBtn" type="button">Kopier timeliste</button>
+            <button class="btn" id="pdfBtn" type="button">Timeliste som PDF</button>
+          </div>
+        </section>
+      </div>
+
+      <!-- ÅR -->
+      <div id="ovYear" hidden>
+        <section class="panel" aria-labelledby="yearTitle">
+          <div class="weeknav">
+            <div class="weekhead"><h2 id="yearTitle"></h2></div>
+            <div class="arrows">
+              <button class="icon-btn" id="prevYear" type="button" aria-label="Forrige år">‹</button>
+              <button class="icon-btn" id="nextYear" type="button" aria-label="Neste år">›</button>
+            </div>
+          </div>
+          <div class="totals" id="yearTotals"></div>
+          <div class="yearchart" id="yearChart"></div>
+          <p class="yearinfo" id="yearInfo" aria-live="polite"></p>
+          <div class="scroll"><table id="yearTable"></table></div>
+        </section>
+      </div>
     </div>
 
     <!-- ARBEIDSGIVERE -->

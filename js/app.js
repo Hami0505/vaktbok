@@ -188,7 +188,7 @@ function renderWeek() {
       const emp = empById(s.employerId), c = safeColor(emp?.color), name = emp ? emp.name : '?';
       return `<button class="bar${warns[s.id] ? ' warn' : ''}" data-action="edit-shift" data-id="${s.id}"
         style="left:${seg.left}%;width:${seg.width}%;background:${c};color:${fgFor(c)}"
-        aria-label="${esc(name)}, ${DAY_LONG[day.getDay()]} ${s.start}–${s.end}${warns[s.id] ? ', har varsel' : ''}">${seg.width > 14 ? esc(name) : ''}</button>`;
+        aria-label="${esc(name)}, ${DAY_LONG[day.getDay()]} ${s.start}–${s.end}${warns[s.id] ? ', har varsel' : ''}" title="${esc(name)} ${s.start}–${s.end}">${seg.width > 22 ? esc(name) : seg.width > 13 ? (seg.left < 1 ? `–${s.end}` : s.start) : ''}</button>`;
     }).join('');
     html += `<div class="d${ds === today ? ' today' : ''}${hol ? ' holiday' : ''}">${DAY[day.getDay()]} ${day.getDate()}.<small>${esc(hol || MONTH[day.getMonth()].slice(0, 3))}</small></div>
       <div class="track">${bars}</div>`;
@@ -215,14 +215,23 @@ function renderWeek() {
     + (inWeek.length ? inWeek.map(s => shiftItem(s, warns[s.id], true)).join('') : '<div class="empty"><p>Ingen vakter denne uka.</p></div>');
 }
 
+// Liten døgnstripe per vakt, som gjenspeiler ukestripa: viser når på døgnet vakta ligger.
+function miniStrip(s, color) {
+  const a = L.toMinutes(s.start), e = L.toMinutes(s.end);
+  const segs = e > a ? [[a, e]] : [[a, 1440], [0, e || 1440]].filter(([x, y]) => y > x);
+  return `<span class="mini" aria-hidden="true">${segs.map(([x, y]) => `<span style="left:${x / 14.4}%;width:${(y - x) / 14.4}%;background:${color}"></span>`).join('')}</span>`;
+}
+
 function shiftItem(s, warn, actions) {
   const emp = empById(s.employerId), c = ui.calc?.get(s.id) || L.calcShift(s, emp);
-  return `<div class="item shift" style="--emp:${safeColor(emp?.color)}">
+  const color = safeColor(emp?.color);
+  return `<div class="item shift">
     <button class="open" data-action="edit-shift" data-id="${s.id}" aria-label="Endre vakt ${esc(emp?.name)} ${fmtDay(s.date)}">
-      <span class="who">${esc(emp ? emp.name : 'Ukjent')}${s.seriesId ? '<span class="series-mark" title="Gjentakende vakt" aria-label="gjentakende"> ↻</span>' : ''}</span>
+      <span class="when"><b>${fmtDay(s.date)}</b> ${s.start}–${s.end}${s.seriesId ? '<span class="series-mark" title="Gjentakende vakt" aria-label="gjentakende"> ↻</span>' : ''}</span>
       <span class="num">${hrs(c.hours)}</span>
-      <span class="meta">${fmtDay(s.date)} ${s.start}–${s.end}${s.breakMin ? `, pause ${s.breakMin} min` : ''}${s.note ? `, ${esc(s.note)}` : ''}</span>
+      <span class="who"><span class="dot" style="background:${color}"></span>${esc(emp ? emp.name : 'Ukjent')}${s.breakMin ? `<span class="muted">, pause ${s.breakMin} min</span>` : ''}${s.note ? `<span class="muted">, ${esc(s.note)}</span>` : ''}</span>
       <span class="meta num">${c.kind === 'volunteer' && !c.pay ? 'Frivillig' : kr(money(c))}${c.overtimeH > 0 ? `, ${hrs(c.overtimeH)} overtid` : ''}</span>
+      ${miniStrip(s, color)}
     </button>
     ${warn ? `<div class="flag ${warn.type}">${esc(warningText(warn))}</div>` : ''}
     ${actions ? `<div class="acts"><button class="btn link" data-action="copy-menu" data-id="${s.id}">Kopier</button></div>` : ''}
@@ -659,7 +668,12 @@ function renderMonth() {
   $('csvBtn').disabled = $('sheetBtn').disabled = $('icsBtn').disabled = !ids.length;
   renderPayslips(byEmp, ids);
   renderYear(y);
-  renderFrikort(y);
+  const fkWarn = renderFrikort(y);
+  // Frikort er for hele året: vises alltid under År, og under Måned bare når det er noe å varsle om.
+  if (ui.ovView !== 'year' && !fkWarn) $('frikortPanel').hidden = true;
+  const yv = ui.ovView === 'year';
+  $('ovMonth').hidden = yv; $('ovYear').hidden = !yv;
+  document.querySelectorAll('[data-view]').forEach(b => b.setAttribute('aria-checked', String((b.dataset.view === 'year') === yv)));
   $('pdfBtn').disabled = !ids.length;
 
   const warns = L.restWarnings(D().shifts, D().employers, D().settings.minRestH);
@@ -686,7 +700,7 @@ function yearInfoText(m, i) {
 function renderFrikort(year) {
   const st = L.frikortStatus(D().shifts, D().employers, D().settings, String(year), L.isoDate(new Date()));
   $('frikortPanel').hidden = !st;
-  if (!st) return;
+  if (!st) return false;
   $('fkTitle').textContent = `Frikort ${year}`;
   const used = Math.min(1, st.earned / st.limit) * 100, all = Math.min(1, st.total / st.limit) * 100;
   const bar = $('fkBar');
@@ -707,12 +721,13 @@ function renderFrikort(year) {
     : `Med vaktene du har planlagt, går du over grensen med ca. ${kr(st.overBy)}. Bestill skattekort på skatteetaten.no før du når den, så slipper du 50 % trekk.`;
   else if (st.earned >= st.limit * 0.8) msg = 'Du har brukt over 80 % av frikortet. Følg med, og bestill skattekort hvis du kommer til å tjene mer.';
   w.hidden = !msg; w.className = `flag block ${cls}`; w.textContent = msg;
+  return !!msg;
 }
 
 function renderYear(y) {
   const { months, byEmp, total } = L.yearSummary(D().shifts, D().employers, y, D().settings);
   ui.yearMonths = months;
-  $('yearTitle').textContent = `Hele ${y}`;
+  $('yearTitle').textContent = String(y);
   $('yearTotals').innerHTML = `
     <div class="lead"><b>${kr(money(total))}</b><span>${payWord()[0].toUpperCase() + payWord().slice(1)}</span></div>
     <div><b>${hrs(total.hours)}</b><span>${total.count} vakter</span></div>
@@ -958,6 +973,9 @@ $('nextWeek').addEventListener('click', () => { ui.weekStart = addDays(ui.weekSt
 $('todayBtn').addEventListener('click', () => { ui.weekStart = L.mondayOf(new Date()); renderWeek(); });
 const shiftMonth = n => { const [y, m] = ui.month.split('-').map(Number); ui.month = ym(new Date(y, m - 1 + n, 1)); renderMonth(); };
 $('prevMonth').addEventListener('click', () => shiftMonth(-1));
+$('prevYear').addEventListener('click', () => shiftMonth(-12));
+$('nextYear').addEventListener('click', () => shiftMonth(12));
+document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => { ui.ovView = b.dataset.view; renderMonth(); }));
 $('nextMonth').addEventListener('click', () => shiftMonth(1));
 
 $('newShiftBtn').addEventListener('click', () => openShift());
@@ -1062,8 +1080,8 @@ document.querySelectorAll('.seg [data-pay]').forEach(b => b.addEventListener('cl
 }));
 $('yearChart').addEventListener('click', ev => {
   const col = ev.target.closest('[data-ym]'); if (!col) return;
-  ui.month = col.dataset.ym; renderMonth();
-  $('monthTitle').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  ui.month = col.dataset.ym; ui.ovView = 'month'; renderMonth();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 const showYearInfo = ev => {
   const col = ev.target.closest('[data-i]'); if (!col || !ui.yearMonths) return;

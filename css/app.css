@@ -456,3 +456,33 @@ dialog { border-radius: 14px; }
 .yearchart .col:hover .stack, .yearchart .col:focus-visible .stack { outline: 2px solid var(--ink); outline-offset: 1px; }
 .exports .btn { font-size: .9rem; padding: 8px 12px; }
 main .panel[hidden] + .panel { border-top: 0; padding-top: 10px; }
+
+/* ---------- Kontrast på knapper og felt (minst 3:1 mot bakgrunnen, WCAG 1.4.11) ---------- */
+:root { --control: #76857F; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --control: #667B83; } }
+.btn, .icon-btn, input, select, .seg, .chip span { border-color: var(--control); }
+.btn:hover, .icon-btn:hover { border-color: var(--ink); }
+.btn.primary { border-color: var(--accent); }
+.btn.danger { border-color: var(--bad); }
+.btn.link, .seg button, .tabs button, .yearchart .col, .item .open, .source { border-color: transparent; }
+.source { border-color: var(--control); }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
+.chip input:checked + span { border-color: var(--ink); }
+
+/* ---------- Vaktrad: liten døgnstripe i arbeidsgiverens farge ---------- */
+.item.shift { border-left: 0; background: none; border-radius: 0; margin: 0; padding: 14px 0; border-top: 1px solid var(--line); }
+.item.shift:first-child { border-top: 0; }
+.item.shift .when { font-size: .95rem; }
+.item.shift .when b { font-weight: 700; }
+.item.shift .who { font-weight: 500; font-size: .9rem; gap: 6px; }
+.item.shift .who .muted { font-weight: 400; }
+.mini { grid-column: 1 / -1; position: relative; height: 6px; margin-top: 8px; border-radius: 3px;
+  background: linear-gradient(90deg, var(--night) 0 25%, var(--line) 25% 70.833%, var(--night) 70.833% 100%); overflow: hidden; }
+.mini span { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
+
+/* ---------- Oversikt: Måned/År og Brutto/Utbetalt på én linje ---------- */
+.ov-bar { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 12px 0 4px; }
+.ov-bar .seg { margin: 0; }
+#netNote, #netHelp { margin: 6px 0 0; }
+.item.shift .who { gap: 0; }
+.item.shift .who .dot { margin-right: 6px; }
