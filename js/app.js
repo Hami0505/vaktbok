@@ -26,6 +26,24 @@ const fgFor = hex => {
 const fmtDay = str => { const d = L.parseDate(str); return `${DAY[d.getDay()]} ${d.getDate()}.${d.getMonth() + 1}.`; };
 
 const store = new Store(config);
+
+// Brutto eller netto i visningene. Netto krever at skattetrekk er lagt inn.
+const taxPct = () => Number(D().settings.taxPct) || 0;
+const showNet = () => D().settings.showNet === true && taxPct() > 0;
+const shown = gross => showNet() ? gross * (1 - taxPct() / 100) : gross;
+const payWord = () => showNet() ? `ca. netto (${num(taxPct(), 1)} % skatt)` : 'estimert brutto';
+
+// Gjør tekniske feilmeldinger (ofte på engelsk fra serveren) om til noe brukeren forstår.
+function friendlyError(e) {
+  const m = String(e?.message || e || '');
+  if (e instanceof TypeError || /fetch|network|load failed|offline/i.test(m)) return 'Får ikke kontakt med serveren. Sjekk at du er på nett, og prøv igjen.';
+  if (/rate limit|too many|seconds/i.test(m)) return 'Du har prøvd mange ganger på kort tid. Vent et minutt og prøv igjen.';
+  if (/expired|invalid.*(otp|token)|token.*(expired|invalid)/i.test(m)) return 'Koden er feil eller har utløpt. Be om en ny kode og bruk den nyeste e-posten.';
+  if (/invalid.*email|email.*invalid|unable to validate email/i.test(m)) return 'E-postadressen ser ikke riktig ut. Sjekk at den er skrevet riktig.';
+  if (/jwt|not authenticated|ikke innlogget/i.test(m)) return 'Innloggingen har gått ut. Logg inn på nytt.';
+  if (/permission denied|row-level security|42501/i.test(m)) return 'Serveren nektet tilgang. Logg ut og inn igjen. Vedvarer det, ta kontakt.';
+  return `Serveren svarte med en feil (${m.slice(0, 80)}). Prøv igjen litt senere.`;
+}
 const ui = { tab: 'uke', weekStart: L.mondayOf(new Date()), month: ym(new Date()), shift: null, emp: null, rules: [], codeSentTo: '', updateReg: null };
 
 const D = () => store.data;
@@ -172,7 +190,7 @@ function renderWeek() {
     .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
   let h = 0, pay = 0;
   for (const s of inWeek) { const c = ui.calc.get(s.id); h += c.hours; pay += c.pay; }
-  $('weekSum').innerHTML = inWeek.length ? `<b>${hrs(h)}</b> og <b>${kr(pay)}</b> estimert denne uka` : '';
+  $('weekSum').innerHTML = inWeek.length ? `<b>${hrs(h)}</b> og <b>${kr(shown(pay))}</b> ${payWord()} denne uka` : '';
 
   if (!D().employers.length) {
     $('weekList').innerHTML = `<div class="empty"><p>Legg inn arbeidsgiverne dine først, med timelønn og tillegg.</p>
@@ -192,7 +210,7 @@ function shiftItem(s, warn, actions) {
       <span class="who"><span class="dot" style="background:${safeColor(emp?.color)}"></span>${esc(emp ? emp.name : 'Ukjent')}</span>
       <span class="num">${hrs(c.hours)}</span>
       <span class="meta">${fmtDay(s.date)} ${s.start}–${s.end}${s.breakMin ? `, pause ${s.breakMin} min` : ''}${s.note ? `, ${esc(s.note)}` : ''}</span>
-      <span class="meta num">${kr(c.pay)}${c.overtimeH > 0 ? `, ${hrs(c.overtimeH)} overtid` : ''}</span>
+      <span class="meta num">${kr(shown(c.pay))}${c.overtimeH > 0 ? `, ${hrs(c.overtimeH)} overtid` : ''}</span>
     </button>
     ${warn ? `<div class="flag ${warn.type}">${esc(warningText(warn))}</div>` : ''}
     ${actions ? `<div class="acts"><button class="btn link" data-action="copy-shift" data-id="${s.id}" data-days="1">Kopier til neste dag</button><button class="btn link" data-action="copy-shift" data-id="${s.id}" data-days="7">Kopier til neste uke</button></div>` : ''}
@@ -210,7 +228,7 @@ function readShiftForm() {
 
 function openShift(s = null) {
   const emps = D().employers.filter(e => !e.archived || (s && e.id === s.employerId));
-  if (!emps.length) { toast('Legg til en arbeidsgiver først.'); openEmp(); return; }
+  if (!emps.length) { toast('Du trenger minst én arbeidsgiver før du kan legge inn vakter. Legg til den første her.'); openEmp(); return; }
   ui.shift = s;
   $('shiftDialogTitle').textContent = s ? 'Endre vakt' : 'Ny vakt';
   $('fEmp').innerHTML = emps.map(e => `<option value="${e.id}">${esc(e.name)}</option>`).join('');
@@ -389,21 +407,21 @@ function renderMonth() {
   const { byEmp, total } = L.monthSummary(D().shifts, D().employers, ui.month, D().settings);
   $('totals').innerHTML = `
     <div><b>${hrs(total.hours)}</b><span>${total.count} vakter</span></div>
-    <div><b>${kr(total.pay)}</b><span>Estimert brutto</span></div>
-    ${total.net != null ? `<div><b>${kr(total.net)}</b><span>Ca. etter ${num(D().settings.taxPct, 1)} % skatt</span></div>` : ''}
-    <div><b>${kr(total.holidayPay)}</b><span>Feriepenger opptjent</span></div>`;
+    <div><b>${kr(shown(total.pay))}</b><span>${payWord()[0].toUpperCase() + payWord().slice(1)}</span></div>
+    <div><b>${kr(total.holidayPay)}</b><span>Feriepenger opptjent${showNet() ? ' (brutto)' : ''}</span></div>`;
+  renderPaySeg();
   const ids = Object.keys(byEmp);
   if (!ids.length) {
     $('empTable').innerHTML = '<tbody><tr><td class="empty" colspan="6">Ingen vakter denne måneden.</td></tr></tbody>';
   } else {
-    $('empTable').innerHTML = `<thead><tr><th>Arbeidsgiver</th><th>Vakter</th><th>Timer</th><th>Tillegg</th><th>Overtid</th><th>Estimert</th></tr></thead><tbody>`
+    $('empTable').innerHTML = `<thead><tr><th>Arbeidsgiver</th><th>Vakter</th><th>Timer</th><th>Tillegg</th><th>Overtid</th><th>${showNet() ? 'Ca. netto' : 'Estimert'}</th></tr></thead><tbody>`
       + ids.map(id => {
         const e = empById(id), o = byEmp[id];
         const subs = Object.values(o.supplements).filter(x => x.hours > 0).map(x => `${esc(x.label)} ${hrs(x.hours)}`).join(', ');
         return `<tr><td><span class="cell-who"><span class="dot" style="background:${safeColor(e?.color)}"></span>${esc(e?.name || 'Ukjent')}</span>${subs ? `<span class="sub">${subs}</span>` : ''}</td>
-          <td>${o.count}</td><td>${hrs(o.hours)}</td><td>${kr(o.supplementPay)}</td><td>${o.overtimePay ? kr(o.overtimePay) : '–'}</td><td>${kr(o.pay)}</td></tr>`;
+          <td>${o.count}</td><td>${hrs(o.hours)}</td><td>${kr(o.supplementPay)}</td><td>${o.overtimePay ? kr(o.overtimePay) : '–'}</td><td>${kr(shown(o.pay))}</td></tr>`;
       }).join('')
-      + `</tbody><tfoot><tr><td>Sum</td><td>${total.count}</td><td>${hrs(total.hours)}</td><td>${kr(total.supplementPay)}</td><td>${total.overtimePay ? kr(total.overtimePay) : '–'}</td><td>${kr(total.pay)}</td></tr></tfoot>`;
+      + `</tbody><tfoot><tr><td>Sum</td><td>${total.count}</td><td>${hrs(total.hours)}</td><td>${kr(total.supplementPay)}</td><td>${total.overtimePay ? kr(total.overtimePay) : '–'}</td><td>${kr(shown(total.pay))}</td></tr></tfoot>`;
   }
   const chosen = $('sheetEmp').value;
   $('sheetEmp').innerHTML = ids.map(id => `<option value="${id}">${esc(empById(id)?.name)}</option>`).join('')
@@ -423,23 +441,39 @@ function renderMonth() {
     + (list.length ? list.map(s => shiftItem(s, warns[s.id], false)).join('') : (weeks.length ? '' : '<p class="muted">Ingen varsler. Alle vakter har nok hvile mellom seg.</p>'));
 }
 
+function renderPaySeg() {
+  const net = D().settings.showNet === true;
+  document.querySelectorAll('.seg [data-pay]').forEach(b => b.setAttribute('aria-checked', String((b.dataset.pay === 'net') === net)));
+  $('netHelp').hidden = !(net && !taxPct());
+}
+
+function yearInfoText(m, i) {
+  return m.count
+    ? `<b>${MONTH[i][0].toUpperCase() + MONTH[i].slice(1)}:</b> ${hrs(m.hours)}, ${kr(shown(m.pay))} ${payWord()}, ${m.count} ${m.count === 1 ? 'vakt' : 'vakter'}`
+    : `<b>${MONTH[i][0].toUpperCase() + MONTH[i].slice(1)}:</b> ingen vakter`;
+}
+
 function renderYear(y) {
   const { months, byEmp, total } = L.yearSummary(D().shifts, D().employers, y, D().settings);
+  ui.yearMonths = months;
   $('yearTitle').textContent = `Hele ${y}`;
   $('yearTotals').innerHTML = `
     <div><b>${hrs(total.hours)}</b><span>${total.count} vakter</span></div>
-    <div><b>${kr(total.pay)}</b><span>Estimert brutto</span></div>
-    <div><b>${kr(total.holidayPay)}</b><span>Feriepenger opptjent</span></div>`;
+    <div><b>${kr(shown(total.pay))}</b><span>${payWord()[0].toUpperCase() + payWord().slice(1)}</span></div>
+    <div><b>${kr(total.holidayPay)}</b><span>Feriepenger opptjent${showNet() ? ' (brutto)' : ''}</span></div>`;
   const max = Math.max(...months.map(m => m.pay), 1);
+  // Hver søyle er en knapp: hold over eller fokuser for å se tallene, trykk for å åpne måneden.
+  $('yearChart').removeAttribute('role');
   $('yearChart').innerHTML = months.map((m, i) =>
-    `<div class="col${m.ym === ui.month ? ' now' : ''}" title="${MONTH[i]}: ${hrs(m.hours)}, ${kr(m.pay)}">
-      <div class="bar" style="height:${Math.round(m.pay / max * 100)}%"></div><span class="m">${MONTH[i].slice(0, 1).toUpperCase()}</span></div>`).join('');
-  $('yearChart').setAttribute('role', 'img');
-  $('yearChart').setAttribute('aria-label', months.filter(m => m.count).map((m, i) => `${MONTH[Number(m.ym.slice(5)) - 1]}: ${kr(m.pay)}`).join(', ') || 'Ingen vakter i år');
+    `<button type="button" class="col${m.ym === ui.month ? ' now' : ''}" data-ym="${m.ym}" data-i="${i}"
+      aria-label="${MONTH[i]}: ${m.count ? `${hrs(m.hours)}, ${kr(shown(m.pay))}` : 'ingen vakter'}. Trykk for å vise måneden."${m.ym === ui.month ? ' aria-current="true"' : ''}>
+      <span class="bar" style="height:${Math.round(m.pay / max * 100)}%"></span><span class="m">${MONTH[i].slice(0, 1).toUpperCase()}</span></button>`).join('');
+  const cur = months.findIndex(m => m.ym === ui.month);
+  $('yearInfo').innerHTML = cur >= 0 ? yearInfoText(months[cur], cur) : '';
   const ids = Object.keys(byEmp);
-  $('yearTable').innerHTML = ids.length ? `<thead><tr><th>Arbeidsgiver</th><th>Vakter</th><th>Timer</th><th>Estimert</th></tr></thead><tbody>`
+  $('yearTable').innerHTML = ids.length ? `<thead><tr><th>Arbeidsgiver</th><th>Vakter</th><th>Timer</th><th>${showNet() ? 'Ca. netto' : 'Estimert'}</th></tr></thead><tbody>`
     + ids.map(id => { const e = empById(id), o = byEmp[id];
-      return `<tr><td><span class="cell-who"><span class="dot" style="background:${safeColor(e?.color)}"></span>${esc(e?.name || 'Ukjent')}</span></td><td>${o.count}</td><td>${hrs(o.hours)}</td><td>${kr(o.pay)}</td></tr>`; }).join('')
+      return `<tr><td><span class="cell-who"><span class="dot" style="background:${safeColor(e?.color)}"></span>${esc(e?.name || 'Ukjent')}</span></td><td>${o.count}</td><td>${hrs(o.hours)}</td><td>${kr(shown(o.pay))}</td></tr>`; }).join('')
     + '</tbody>' : '';
 }
 
@@ -516,7 +550,7 @@ function renderAccount() {
     const n = store.pending;
     p.innerHTML = `<h2>Konto</h2>
       <p>Logget inn som <b>${esc(store.user.email)}</b></p>
-      <p class="small muted">${n ? `${n} ${n === 1 ? 'endring' : 'endringer'} venter på å bli synket.` : 'Alle endringer er synket.'}${store.lastError ? ` Siste feil: ${esc(store.lastError)}${contact ? ` Vedvarer feilen, kontakt <a href="mailto:${esc(contact)}">${esc(contact)}</a>.` : ''}` : ''}</p>
+      <p class="small muted">${n ? `${n} ${n === 1 ? 'endring' : 'endringer'} venter på å bli synket.` : 'Alle endringer er synket.'}${store.lastError ? ` ${esc(friendlyError(store.lastError))}${contact ? ` Vedvarer feilen, kontakt <a href="mailto:${esc(contact)}">${esc(contact)}</a>.` : ''}` : ''}</p>
       <div class="row"><button class="btn" data-action="sync-now">Synk nå</button><button class="btn" data-action="sign-out">Logg ut</button></div>`;
   }
   const s = D().settings;
@@ -546,7 +580,7 @@ function remapImport(data) {
 
 async function importData(data, label) {
   const { employers, shifts } = remapImport(data);
-  if (!employers.length && !shifts.length) { toast('Fant ingen gyldige data i fila.'); return false; }
+  if (!employers.length && !shifts.length) { toast('Fila er en Vaktbok-fil, men inneholder ingen arbeidsgivere eller vakter som kunne leses.'); return false; }
   const ok = await confirmBox('Importere data?', `${label}: ${employers.length} arbeidsgivere og ${shifts.length} vakter legges til ved siden av det du har fra før.`, 'Importer');
   if (!ok) return false;
   store.addAll({ employers, shifts });
@@ -596,6 +630,7 @@ function render() {
 }
 
 const actions = {
+  'go-settings': () => { setTab('konto'); $('sTax').focus(); },
   'landing-demo': () => { leaveLanding('uke'); loadDemo(); },
   'landing-start': () => { leaveLanding('arbeidsgivere'); openEmp(); },
   'landing-login': () => leaveLanding('konto'),
@@ -717,7 +752,7 @@ $('icsBtn').addEventListener('click', () => download(`vaktbok-${ui.month}.ics`, 
 $('payslipList').addEventListener('change', ev => {
   const id = ev.target.dataset.paid; if (!id) return;
   const v = ev.target.value === '' ? null : Number(ev.target.value);
-  if (v != null && !(v >= 0 && v < 1e7)) { toast('Skriv inn et gyldig beløp.'); return; }
+  if (v != null && !(v >= 0 && v < 1e7)) { toast('Skriv beløpet som et tall i hele kroner, for eksempel 18500, uten «kr» eller mellomrom.'); return; }
   const payslips = structuredClone(D().settings.payslips || {});
   const month = payslips[ui.month] ||= {};
   if (v == null) delete month[id]; else month[id] = v;
@@ -731,36 +766,129 @@ $('copyRulesFrom').addEventListener('change', ev => {
   }
   renderRules(); toast(`Tillegg kopiert fra ${src.name}`);
 });
+document.querySelectorAll('.seg [data-pay]').forEach(b => b.addEventListener('click', () => {
+  store.updateSettings({ showNet: b.dataset.pay === 'net' });
+}));
+$('yearChart').addEventListener('click', ev => {
+  const col = ev.target.closest('[data-ym]'); if (!col) return;
+  ui.month = col.dataset.ym; renderMonth();
+  $('monthTitle').scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+const showYearInfo = ev => {
+  const col = ev.target.closest('[data-i]'); if (!col || !ui.yearMonths) return;
+  const i = Number(col.dataset.i); $('yearInfo').innerHTML = yearInfoText(ui.yearMonths[i], i);
+};
+$('yearChart').addEventListener('mouseover', showYearInfo);
+$('yearChart').addEventListener('focusin', showYearInfo);
+$('yearChart').addEventListener('mouseleave', () => {
+  const i = (ui.yearMonths || []).findIndex(m => m.ym === ui.month);
+  $('yearInfo').innerHTML = i >= 0 ? yearInfoText(ui.yearMonths[i], i) : '';
+});
 $('csvBtn').addEventListener('click', () => download(`vaktbok-${ui.month}.csv`, L.toCSV(D().shifts, D().employers, ui.month), 'text/csv;charset=utf-8'));
 $('sheetBtn').addEventListener('click', async () => {
   const text = L.toTimesheet(D().shifts, D().employers, ui.month, $('sheetEmp').value);
   try { await navigator.clipboard.writeText(text); toast('Timelista er kopiert'); }
-  catch { download(`timeliste-${ui.month}.txt`, text, 'text/plain;charset=utf-8'); }
+  catch { download(`timeliste-${ui.month}.txt`, text, 'text/plain;charset=utf-8'); toast('Nettleseren tillot ikke kopiering, så timelista er lastet ned som tekstfil i stedet.'); }
 });
 
 $('settingsForm').addEventListener('change', () => {
-  const rest = Number($('sRest').value), week = Number($('sWeek').value), tax = Number($('sTax').value || 0);
-  if (!(rest >= 0 && rest <= 24) || !(week >= 1 && week <= 168) || !(tax >= 0 && tax <= 60)) { toast('Sjekk verdiene i innstillingene.'); return; }
+  const f = { rest: $('sRest'), week: $('sWeek'), tax: $('sTax') };
+  const rest = Number(f.rest.value), week = Number(f.week.value), tax = f.tax.value === '' ? 0 : Number(f.tax.value);
+  const errs = [];
+  const check = (el, ok, msg) => { el.setAttribute('aria-invalid', String(!ok)); if (!ok) errs.push(msg); };
+  check(f.rest, f.rest.value !== '' && rest >= 0 && rest <= 24, 'Minste hviletid må være mellom 0 og 24 timer. Arbeidsmiljøloven bruker 11 timer som hovedregel.');
+  check(f.week, f.week.value !== '' && week >= 1 && week <= 168, 'Ukegrensen må være mellom 1 og 168 timer. 48 timer er vanlig.');
+  check(f.tax, tax >= 0 && tax <= 60, 'Skattetrekket må være mellom 0 og 60 prosent. Du finner det på skattekortet ditt.');
+  $('settingsErrors').innerHTML = errs.map(x => `<li>${esc(x)}</li>`).join('');
+  if (errs.length) return;
   store.updateSettings({ holidayPayPct: Number($('sHoliday').value), minRestH: rest, weekLimitH: week, taxPct: tax });
-  toast('Innstillinger lagret');
+  toast('Innstillingene er lagret');
 });
 
 $('exportBtn').addEventListener('click', () => download(`vaktbok-data-${L.isoDate(new Date())}.json`, JSON.stringify(store.exportAll(), null, 2), 'application/json'));
 $('importFile').addEventListener('change', async ev => {
   const f = ev.target.files[0]; ev.target.value = '';
   if (!f) return;
-  if (f.size > 5e6) { toast('Fila er for stor.'); return; }
-  try { await importData(JSON.parse(await f.text()), f.name); }
-  catch { toast('Fila kunne ikke leses. Bruk en fil lastet ned fra Vaktbok.'); }
+  if (f.size > 5e6) { toast('Fila er større enn 5 MB. Vaktbok- og kalenderfiler er vanligvis mye mindre, så sjekk at du valgte riktig fil.'); return; }
+  let text;
+  try { text = await f.text(); } catch { toast('Fila kunne ikke åpnes. Prøv å laste den ned på nytt.'); return; }
+  if (/BEGIN:VCALENDAR/.test(text)) { openIcsImport(text, f.name); return; }
+  let data;
+  try { data = JSON.parse(text); } catch { toast('Fila er verken en Vaktbok-fil (.json) eller en kalenderfil (.ics). Velg en fil lastet ned fra Vaktbok eller eksportert fra en kalender.'); return; }
+  await importData(data, f.name);
 });
+
+// ---------- Import fra kalender ----------
+
+function openIcsImport(text, name) {
+  let events;
+  try { events = L.parseICS(text); } catch { toast('Kalenderfila kunne ikke leses. Prøv å eksportere den på nytt fra kalenderen.'); return; }
+  if (!events.length) { toast('Kalenderfila inneholder ingen hendelser.'); return; }
+  if (!D().employers.length) { toast('Legg til arbeidsgiveren vaktene gjelder først. Deretter kan du importere kalenderen.'); setTab('arbeidsgivere'); openEmp(); return; }
+  ui.ics = events;
+  const timed = events.filter(e => e.start && !e.allDay).map(e => L.isoDate(e.start)).sort();
+  $('icsFound').textContent = `${name}: ${events.length} hendelser${timed.length ? `, fra ${fmtDay(timed[0])} til ${fmtDay(timed.at(-1))}` : '.'}`;
+  $('icsEmp').innerHTML = D().employers.filter(e => !e.archived).map(e => `<option value="${e.id}">${esc(e.name)}</option>`).join('')
+    + (D().employers.length > 1 ? '<option value="auto">Finn ut fra navnet i hendelsen</option>' : '');
+  const today = new Date();
+  $('icsFrom').value = L.isoDate(new Date(today.getFullYear(), today.getMonth() - 1, 1));
+  $('icsTo').value = L.isoDate(new Date(today.getFullYear(), today.getMonth() + 3, 0));
+  $('icsContains').value = '';
+  updateIcsPreview();
+  $('icsDialog').showModal();
+}
+
+function icsResult() {
+  const choice = $('icsEmp').value;
+  const emps = D().employers;
+  const employerFor = choice === 'auto'
+    ? sum => (emps.find(e => sum.toLowerCase().includes(e.name.toLowerCase())) || {}).id || null
+    : () => choice;
+  return L.icsToShifts(ui.ics || [], {
+    employerFor, from: $('icsFrom').value, to: $('icsTo').value, contains: $('icsContains').value.trim(),
+    existing: D().shifts, newId,
+  });
+}
+
+function updateIcsPreview() {
+  if ($('icsFrom').value && $('icsTo').value && $('icsTo').value < $('icsFrom').value) {
+    $('icsPreview').innerHTML = '<span class="flag block overlap">«Til og med» må være samme dag som «Fra og med» eller senere.</span>';
+    $('icsImportBtn').disabled = true; return;
+  }
+  const { shifts, skipped } = icsResult();
+  const why = [
+    [skipped.outside, 'utenfor perioden'], [skipped.filtered, 'uten teksten du søkte på'], [skipped.allDay, 'heldagshendelser'],
+    [skipped.duplicate, 'finnes allerede'], [skipped.noEmployer, 'uten kjent arbeidsgiver i navnet'],
+    [skipped.recurring, 'gjentakende hendelser (legg dem inn med «Gjenta» i stedet)'], [skipped.cancelled, 'avlyste'],
+    [skipped.invalid, 'uten gyldig start og slutt, eller lengre enn et døgn'],
+  ].filter(([n]) => n).map(([n, t]) => `${n} ${t}`);
+  $('icsPreview').innerHTML = `<b>${shifts.length} ${shifts.length === 1 ? 'vakt' : 'vakter'}</b> blir importert.`
+    + (why.length ? `<br><span class="muted">Hoppes over: ${esc(why.join(', '))}.</span>` : '')
+    + (shifts.length ? '<br><span class="muted">Pause settes til 0 minutter. Du kan endre hver vakt etterpå.</span>' : '');
+  $('icsImportBtn').disabled = !shifts.length;
+}
+
+$('icsForm').addEventListener('input', updateIcsPreview);
+$('icsForm').addEventListener('submit', ev => {
+  ev.preventDefault();
+  const { shifts } = icsResult();
+  if (!shifts.length) return;
+  store.addAll({ shifts });
+  $('icsDialog').close();
+  ui.ics = null;
+  ui.weekStart = L.mondayOf(L.parseDate(shifts[0].date));
+  setTab('uke');
+  toast(`Importerte ${shifts.length} ${shifts.length === 1 ? 'vakt' : 'vakter'} fra kalenderen`);
+});
+
 $('demoBtn').addEventListener('click', loadDemo);
 $('wipeBtn').addEventListener('click', async () => {
   if (!(await confirmBox('Slette alt?', 'Alle vakter og arbeidsgivere slettes for godt. Last ned en kopi først hvis du vil beholde dem.', 'Slett alt', true))) return;
-  try { await store.deleteEverything(); toast('Alle data er slettet'); } catch (e) { toast(`Kunne ikke slette: ${e.message}`); }
+  try { await store.deleteEverything(); toast('Alle data er slettet'); } catch (e) { toast(`Kunne ikke slette dataene. ${friendlyError(e)}`); }
 });
 $('deleteAccountBtn').addEventListener('click', async () => {
   if (!(await confirmBox('Slette kontoen?', 'Kontoen og alle vakter, arbeidsgivere og innstillinger slettes for godt fra serveren og denne enheten.', 'Slett kontoen', true))) return;
-  try { await store.deleteAccount(); toast('Kontoen er slettet'); } catch (e) { toast(`Kunne ikke slette kontoen: ${e.message}`); }
+  try { await store.deleteAccount(); toast('Kontoen er slettet'); } catch (e) { toast(`Kunne ikke slette kontoen. ${friendlyError(e)}`); }
 });
 
 $('accountPanel').addEventListener('submit', async ev => {
@@ -774,7 +902,7 @@ $('accountPanel').addEventListener('submit', async ev => {
       await store.verifyCode(ui.codeSentTo, $('codeInput').value.trim()); ui.codeSentTo = ''; toast('Du er logget inn');
     }
   } catch (e) {
-    toast(/rate|seconds/i.test(e.message) ? 'Vent litt før du ber om en ny kode.' : /expired|invalid/i.test(e.message) ? 'Koden er feil eller utløpt.' : `Noe gikk galt: ${e.message}`);
+    toast(friendlyError(e));
   } finally { btn.disabled = false; }
 });
 

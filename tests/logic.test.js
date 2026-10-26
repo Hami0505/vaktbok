@@ -292,3 +292,41 @@ test('timeliste for alle arbeidsgivere, gruppert med summer', () => {
   assert.match(t, /Totalt: 15,50 timer \(3 vakter\)/);
   assert.ok(!/Totalt/.test(L.toTimesheet(shifts, [emp, emp2], '2026-10', 'e1')), 'én arbeidsgiver har ingen totallinje');
 });
+
+const ICS = [
+  'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Test//NB',
+  'BEGIN:VEVENT', 'UID:a1', 'DTSTART:20261023T200000Z', 'DTEND:20261024T053000Z', 'SUMMARY:Natt Bemannings', ' byrå', 'END:VEVENT',
+  'BEGIN:VEVENT', 'UID:a2', 'DTSTART;TZID=Europe/Oslo:20261021T080000', 'DTEND;TZID=Europe/Oslo:20261021T160000', 'SUMMARY:Vakt\\, Kafé', 'END:VEVENT',
+  'BEGIN:VEVENT', 'UID:a3', 'DTSTART;VALUE=DATE:20261025', 'DTEND;VALUE=DATE:20261026', 'SUMMARY:Bursdag', 'END:VEVENT',
+  'BEGIN:VEVENT', 'UID:a4', 'DTSTART:20261028T080000', 'DTEND:20261028T160000', 'RRULE:FREQ=WEEKLY', 'SUMMARY:Fast vakt', 'END:VEVENT',
+  'BEGIN:VEVENT', 'UID:a5', 'DTSTART:20261029T080000', 'DTEND:20261029T160000', 'STATUS:CANCELLED', 'SUMMARY:Avlyst', 'END:VEVENT',
+  'BEGIN:VEVENT', 'UID:a6', 'DTSTART:20261201T080000', 'DTEND:20261201T160000', 'SUMMARY:Langt frem', 'END:VEVENT',
+  'END:VCALENDAR',
+].join('\r\n');
+
+test('kalenderfil: tolker tider, sammenbrettede linjer og escaping', () => {
+  const ev = L.parseICS(ICS);
+  assert.equal(ev.length, 6);
+  assert.equal(ev[0].summary, 'Natt Bemanningsbyrå');
+  assert.equal(L.isoDate(ev[0].start), '2026-10-23');
+  assert.equal(ev[0].start.getHours(), 22, '20:00 UTC = 22:00 norsk sommertid');
+  assert.equal(ev[1].summary, 'Vakt, Kafé');
+  assert.equal(ev[1].start.getHours(), 8, 'TZID tolkes som lokal tid');
+  assert.ok(ev[2].allDay); assert.ok(ev[3].recurring); assert.ok(ev[4].cancelled);
+  assert.throws(() => L.parseICS('ikke en kalender'));
+});
+
+test('kalenderfil blir vakter, med filtre og uten dubletter', () => {
+  let n = 0; const id = () => `k${++n}`;
+  const byName = sum => /bemanning/i.test(sum) ? 'e1' : /kafé/i.test(sum) ? 'e2' : null;
+  const r = L.icsToShifts(L.parseICS(ICS), { employerFor: byName, from: '2026-10-01', to: '2026-10-31', newId: id });
+  assert.equal(r.shifts.length, 2);
+  const natt = r.shifts.find(s => s.employerId === 'e1');
+  assert.deepEqual([natt.date, natt.start, natt.end], ['2026-10-23', '22:00', '07:30']);
+  assert.deepEqual(r.skipped, { allDay: 1, recurring: 1, cancelled: 1, invalid: 0, outside: 1, filtered: 0, noEmployer: 0, duplicate: 0 });
+  const again = L.icsToShifts(L.parseICS(ICS), { employerFor: byName, from: '2026-10-01', to: '2026-10-31', existing: r.shifts, newId: id });
+  assert.equal(again.shifts.length, 0); assert.equal(again.skipped.duplicate, 2);
+  const filtered = L.icsToShifts(L.parseICS(ICS), { employerFor: () => 'e1', from: '2026-10-01', to: '2026-10-31', contains: 'natt', newId: id });
+  assert.equal(filtered.shifts.length, 1); assert.equal(filtered.skipped.filtered, 1);
+  for (const s of r.shifts) assert.deepEqual(L.validateShift(s, [emp, emp2]), []);
+});

@@ -101,6 +101,11 @@
           <h2 id="monthTitle"></h2>
           <button class="icon-btn" id="nextMonth" type="button" aria-label="Neste måned">›</button>
         </div>
+        <div class="seg" role="radiogroup" aria-label="Vis beløp som">
+          <button type="button" role="radio" data-pay="gross" aria-checked="true">Brutto</button>
+          <button type="button" role="radio" data-pay="net" aria-checked="false">Netto</button>
+        </div>
+        <p class="help" id="netHelp" hidden>Legg inn skattetrekket ditt under <button class="btn link inline" type="button" data-action="go-settings">Konto → Innstillinger</button> for å se netto.</p>
         <div class="totals" id="totals"></div>
         <div class="scroll"><table id="empTable"></table></div>
         <p class="small muted">Estimat før skatt. Tillegg, overtid og feriepenger regnes etter reglene du har lagt inn per arbeidsgiver. Sjekk alltid mot lønnsslippen.</p>
@@ -116,6 +121,7 @@
         <h2 id="yearTitle"></h2>
         <div class="totals" id="yearTotals"></div>
         <div class="yearchart" id="yearChart"></div>
+        <p class="yearinfo" id="yearInfo" aria-live="polite"></p>
         <div class="scroll"><table id="yearTable"></table></div>
       </section>
       <section class="panel" aria-labelledby="payslipTitle">
@@ -158,6 +164,7 @@
           <label>Skattetrekk i prosent (valgfritt)<input type="number" id="sTax" min="0" max="60" step="0.5" inputmode="decimal" placeholder="F.eks. 30" aria-describedby="taxHelp">
             <span class="help" id="taxHelp">Fra skattekortet. Gir et omtrentlig netto under Oversikt.</span></label>
         </form>
+        <ul class="errors" id="settingsErrors" role="alert"></ul>
       </section>
 
       <section class="panel">
@@ -165,9 +172,10 @@
         <p class="small muted" id="dataNote"></p>
         <div class="row">
           <button class="btn" id="exportBtn" type="button">Last ned alle data</button>
-          <label class="btn filebtn">Importer fra fil<input type="file" id="importFile" accept="application/json,.json"></label>
+          <label class="btn filebtn">Importer fra fil<input type="file" id="importFile" aria-describedby="importHelp"></label>
           <button class="btn" id="demoBtn" type="button" hidden>Prøv med eksempeldata</button>
         </div>
+        <p class="help" id="importHelp">Godtar en fil lastet ned fra Vaktbok (.json) eller en kalenderfil (.ics) fra for eksempel Google Kalender, iPhone, Outlook eller vaktplanen til et byrå.</p>
         <div class="row">
           <button class="btn danger" id="wipeBtn" type="button">Slett alle vakter og arbeidsgivere</button>
           <button class="btn danger" id="deleteAccountBtn" type="button" hidden>Slett kontoen min</button>
@@ -258,6 +266,27 @@
       <span class="spacer"></span>
       <button class="btn" type="button" data-close>Avbryt</button>
       <button class="btn primary" type="submit">Lagre arbeidsgiver</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Import fra kalender -->
+<dialog id="icsDialog" aria-labelledby="icsTitle">
+  <form method="dialog" id="icsForm" novalidate>
+    <h2 id="icsTitle">Importer fra kalender</h2>
+    <p class="small muted" id="icsFound"></p>
+    <div class="grid">
+      <label class="span2">Arbeidsgiver<select id="icsEmp"></select>
+        <span class="help">«Finn ut fra navnet» bruker arbeidsgiveren hvis navnet står i hendelsen, for eksempel «Vakt Kafé».</span></label>
+      <label>Fra og med<input type="date" id="icsFrom"></label>
+      <label>Til og med<input type="date" id="icsTo"></label>
+      <label class="span2">Bare hendelser som inneholder (valgfritt)<input type="text" id="icsContains" placeholder="F.eks. vakt" maxlength="40"></label>
+    </div>
+    <div class="preview" id="icsPreview" aria-live="polite"></div>
+    <div class="dialog-actions">
+      <span class="spacer"></span>
+      <button class="btn" type="button" data-close>Avbryt</button>
+      <button class="btn primary" type="submit" id="icsImportBtn">Importer</button>
     </div>
   </form>
 </dialog>

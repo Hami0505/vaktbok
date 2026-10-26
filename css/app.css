@@ -288,3 +288,14 @@ body.show-landing .tabs, body.show-landing main, body.show-landing #banners { di
   .print-area .sign div { border-top: 1px solid #000; padding-top: 4pt; font-size: 9pt; }
 }
 @media print { .print-area h2 { font-size: 13pt; margin: 16pt 0 0; } }
+
+/* Brutto/netto-velger */
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; background: var(--paper); margin: 0 0 14px; }
+.seg button { border: 0; background: none; color: var(--ink); font: inherit; font-weight: 500; padding: 6px 16px; border-radius: 999px; cursor: pointer; }
+.seg button[aria-checked="true"] { background: var(--ink); color: var(--paper); }
+
+/* Årsdiagram: søyler er knapper */
+.yearchart .col { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; border-radius: 6px; }
+.yearchart .col:hover .bar, .yearchart .col:focus-visible .bar { background: var(--ink); opacity: .75; }
+.yearinfo { margin: -8px 0 16px; min-height: 1.5em; font-size: .9rem; }
+.yearinfo b { color: var(--ink); }

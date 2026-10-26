@@ -390,6 +390,72 @@ export function toICS(shifts, employers, now = new Date()) {
   return lines.join('\r\n') + '\r\n';
 }
 
+// ---------- Import fra kalender (.ics) ----------
+// Leser hendelser fra en kalenderfil (Google, iPhone, Outlook, vaktplansystemer).
+// Tider med Z tolkes som UTC, tider med TZID eller uten sone som lokal tid (norsk tid i praksis).
+
+function icsDateValue(value, params) {
+  if (/VALUE=DATE(?!-)/i.test(params) || /^\d{8}$/.test(value)) return { allDay: true };
+  const m = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})?(Z)?$/.exec(value);
+  if (!m) return null;
+  const [, y, mo, d, h, mi, sec = '0', z] = m;
+  const date = z ? new Date(Date.UTC(+y, mo - 1, +d, +h, +mi, +sec)) : new Date(+y, mo - 1, +d, +h, +mi, +sec);
+  return { date };
+}
+const icsUnescape = t => t.replace(/\\n/gi, ' ').replace(/\\([,;\\])/g, '$1').trim();
+
+export function parseICS(text) {
+  const lines = String(text).replace(/\r?\n[ \t]/g, '').split(/\r?\n/);
+  if (!lines.some(l => l.trim() === 'BEGIN:VCALENDAR')) throw new Error('not-ics');
+  const events = [];
+  let ev = null;
+  for (const line of lines) {
+    if (line === 'BEGIN:VEVENT') { ev = {}; continue; }
+    if (line === 'END:VEVENT') { if (ev) events.push(ev); ev = null; continue; }
+    if (!ev) continue;
+    const i = line.indexOf(':'); if (i < 0) continue;
+    const head = line.slice(0, i), value = line.slice(i + 1);
+    const [name, ...params] = head.split(';');
+    const key = name.toUpperCase(), par = params.join(';');
+    if (key === 'DTSTART' || key === 'DTEND') ev[key] = icsDateValue(value.trim(), par);
+    else if (key === 'SUMMARY') ev.summary = icsUnescape(value);
+    else if (key === 'UID') ev.uid = value.trim();
+    else if (key === 'RRULE') ev.recurring = true;
+    else if (key === 'STATUS') ev.cancelled = /CANCELLED/i.test(value);
+  }
+  return events.map(e => ({
+    uid: e.uid || '', summary: e.summary || '', recurring: !!e.recurring, cancelled: !!e.cancelled,
+    allDay: !!(e.DTSTART && e.DTSTART.allDay),
+    start: e.DTSTART && e.DTSTART.date || null, end: e.DTEND && e.DTEND.date || null,
+  }));
+}
+
+// Gjør kalenderhendelser om til vakter. employerFor(summary) returnerer arbeidsgiver-id eller null.
+// Hopper over heldagshendelser, avlyste, gjentakende (RRULE), for lange, utenfor perioden og dubletter.
+export function icsToShifts(events, { employerFor, from, to, contains = '', existing = [], newId }) {
+  const skipped = { allDay: 0, recurring: 0, cancelled: 0, invalid: 0, outside: 0, filtered: 0, noEmployer: 0, duplicate: 0 };
+  const seen = new Set(existing.map(s => `${s.employerId}|${s.date}|${s.start}|${s.end}`));
+  const shifts = [];
+  const hhmm = d => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  for (const e of events) {
+    if (e.cancelled) { skipped.cancelled++; continue; }
+    if (e.allDay) { skipped.allDay++; continue; }
+    if (e.recurring) { skipped.recurring++; continue; }
+    if (!e.start || !e.end || e.end <= e.start || e.end - e.start > 24 * HOUR) { skipped.invalid++; continue; }
+    const date = isoDate(e.start);
+    if ((from && date < from) || (to && date > to)) { skipped.outside++; continue; }
+    if (contains && !e.summary.toLowerCase().includes(contains.toLowerCase())) { skipped.filtered++; continue; }
+    const employerId = employerFor(e.summary);
+    if (!employerId) { skipped.noEmployer++; continue; }
+    const s = { id: newId(), employerId, date, start: hhmm(e.start), end: hhmm(e.end), breakMin: 0, note: '' };
+    const key = `${employerId}|${date}|${s.start}|${s.end}`;
+    if (seen.has(key)) { skipped.duplicate++; continue; }
+    seen.add(key);
+    shifts.push(s);
+  }
+  return { shifts, skipped };
+}
+
 // ---------- Import fra prototypen (localStorage 'vaktbok-v1') ----------
 
 export function migrateV1(old, newId) {
