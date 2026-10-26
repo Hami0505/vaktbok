@@ -206,7 +206,7 @@ test('månedsoppsummering bruker ukeovertid og netto', () => {
   const m = L.monthSummary(shifts, [e], '2026-10', { holidayPayPct: 10.2, taxPct: 30 });
   close(m.total.overtimePay, 5 * 50, 'overtid');
   close(m.total.net, (4500 + 250) * 0.7, 'netto');
-  assert.equal(L.monthSummary(shifts, [e], '2026-10', { taxPct: 0 }).total.net, null);
+  close(L.monthSummary(shifts, [e], '2026-10', { taxPct: 0 }).total.net, 4750, 'uten skatt er netto lik brutto');
 });
 
 test('sammenligning med lønnsslipp', () => {
@@ -462,4 +462,52 @@ test('validering av beløp og lønnsform', () => {
   assert.ok(L.validateShift(S({ date: '2026-11-03', start: '08:00', end: '09:00', fee: -5 }), [emp]).length);
   assert.deepEqual(L.validateEmployer({ name: 'Frivillig', rate: NaN, rules: [], pay: { type: 'volunteer' } }), []);
   assert.ok(L.validateEmployer({ name: 'Foredrag', rate: 0, rules: [], pay: { type: 'fee', feeDefault: -1 } }).length);
+});
+
+
+test('skatt per arbeidsgiver: standard, prosent og tabelltrekk', () => {
+  const pct = { ...emp, id: 'p', pay: { type: 'hourly', tax: { mode: 'pct', pct: 40 } } };
+  const tab = { ...emp, id: 't', pay: { type: 'hourly', tax: { mode: 'table', slipGross: 20000, slipTax: 5000 } } };
+  close(L.taxPctFor(emp, { taxPct: 30 }), 30, 'standard'); close(L.taxPctFor(pct, { taxPct: 30 }), 40, 'prosent'); close(L.taxPctFor(tab, {}), 25, 'tabell fra lønnsslipp');
+  const shifts = [S({ employerId: 'p', date: '2026-11-02', start: '08:00', end: '13:00' }), S({ employerId: 't', date: '2026-11-03', start: '08:00', end: '13:00' })];
+  const m = L.monthSummary(shifts, [pct, tab], '2026-11', { taxPct: 30, holidayPayPct: 10.2 });
+  close(m.byEmp.p.net, 1000 * 0.6, 'prosenttrekk'); close(m.byEmp.t.net, 1000 * 0.75, 'tabelltrekk');
+});
+
+test('skattefri organisasjon: fritt til 10 000 kr per år, ellers skattepliktig fra første krone', () => {
+  const org = { id: 'o', name: 'Idrettslag', rate: 0, rules: [], pay: { type: 'fee', feeDefault: 4000, tax: { mode: 'freeOrg' } } };
+  const two = [S({ employerId: 'o', date: '2026-03-01', start: '10:00', end: '12:00' }), S({ employerId: 'o', date: '2026-04-01', start: '10:00', end: '12:00' })];
+  const a = L.calcAllNet(two, [org], { taxPct: 30 });
+  assert.ok([...a.values()].every(c => c.tax === 0 && c.taxFree), '8 000 kr er skattefritt');
+  const three = [...two, S({ employerId: 'o', date: '2026-05-01', start: '10:00', end: '12:00' })];
+  const b = L.calcAllNet(three, [org], { taxPct: 30 });
+  close([...b.values()].reduce((x, c) => x + c.tax, 0), 12000 * 0.3, '12 000 kr: alt blir skattepliktig');
+  const nextYear = [...two, S({ employerId: 'o', date: '2027-01-10', start: '10:00', end: '12:00' })];
+  assert.ok([...L.calcAllNet(nextYear, [org], { taxPct: 30 }).values()].every(c => c.tax === 0), 'grensen gjelder per år');
+});
+
+test('frikort: ingen trekk til grensen, deretter 50 % av det som er over', () => {
+  const fee = { id: 'f', name: 'Jobb', rate: 0, rules: [], pay: { type: 'fee', feeDefault: 30000 } };
+  const shifts = [1, 2, 3, 4].map(m => S({ employerId: 'f', date: `2026-0${m}-10`, start: '08:00', end: '16:00' }));
+  const settings = { taxPct: 30, frikort: { on: true, limit: 100000, otherIncome: 5000 } };
+  const all = L.calcAllNet(shifts, [fee], settings);
+  const taxes = shifts.map(s => all.get(s.id).tax);
+  // 5 000 fra før + 30 000 × 4 = 125 000 → 25 000 over grensen, 50 % trekk på den siste vakta
+  assert.deepEqual(taxes, [0, 0, 0, 12500]);
+  const st = L.frikortStatus(shifts, [fee], settings, '2026', '2026-02-28');
+  assert.deepEqual([st.earned, st.planned, st.left, st.overBy], [65000, 60000, 35000, 25000]);
+  assert.equal(L.frikortStatus(shifts, [fee], { taxPct: 30 }, '2026', '2026-12-31'), null, 'uten frikort');
+});
+
+test('skattefri organisasjon teller ikke mot frikortet', () => {
+  const org = { id: 'o', name: 'Lag', rate: 0, rules: [], pay: { type: 'fee', feeDefault: 9000, tax: { mode: 'freeOrg' } } };
+  const shifts = [S({ employerId: 'o', date: '2026-05-01', start: '10:00', end: '12:00' })];
+  const st = L.frikortStatus(shifts, [org], { frikort: { on: true, limit: 100000 } }, '2026', '2026-12-31');
+  assert.equal(st.earned, 0);
+});
+
+test('validering av skatt', () => {
+  assert.ok(L.validateEmployer({ ...emp, pay: { type: 'hourly', tax: { mode: 'pct', pct: 80 } } }).length);
+  assert.ok(L.validateEmployer({ ...emp, pay: { type: 'hourly', tax: { mode: 'table', slipGross: 1000, slipTax: 2000 } } }).length);
+  assert.deepEqual(L.validateEmployer({ ...emp, pay: { type: 'hourly', tax: { mode: 'table', slipGross: 20000, slipTax: 5000 } } }), []);
 });

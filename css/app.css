@@ -367,3 +367,14 @@ input[type="radio"] { width: 20px; min-height: 20px; height: 20px; margin: 0; ac
 .fixedpay label { margin-top: 8px; }
 .kind-tag { font-size: .75rem; font-weight: 500; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; margin-left: 6px; }
 .hello { font-size: 1.4rem; font-weight: 700; letter-spacing: -.01em; margin: 0 0 2px; }
+
+/* Frikort */
+.frikort-box { margin: 0; }
+.fk-bar { position: relative; height: 14px; border-radius: 999px; background: var(--paper); border: 1px solid var(--line); overflow: hidden; margin: 6px 0 10px; }
+.fk-bar span { position: absolute; top: 0; bottom: 0; }
+.fk-used { left: 0; background: var(--accent); }
+.fk-planned { background: repeating-linear-gradient(45deg, var(--accent) 0 4px, transparent 4px 8px); opacity: .55; }
+.fk-bar.over .fk-used { background: var(--bad); }
+.frikort-panel p { margin: 0 0 6px; }
+#fkWarn.rest { background: var(--warn-bg); color: var(--warn); }
+#fkWarn.overlap { background: var(--bad-bg); color: var(--bad); }

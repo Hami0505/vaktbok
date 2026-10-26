@@ -8,7 +8,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   holidayPayPct: 10.2, // feriepenger: 10,2 % (12 % ved 5 ukers ferie)
   minRestH: 11,        // arbeidsmiljøloven § 10-8 (1): 11 timer sammenhengende fri per 24 timer
   weekLimitH: 48,      // varsel når samlet arbeidstid i en uke passerer dette
-  taxPct: 0,           // valgfritt prosenttrekk fra skattekortet, 0 = ikke vis netto
+  taxPct: 0,           // standard skattetrekk i prosent for arbeidsgivere uten eget valg
+  frikort: null,       // { on: true, limit: 100000, otherIncome: 0 } – inntekt i år utenfor Vaktbok, f.eks. feriepenger
   payslips: {},        // { 'YYYY-MM': { employerId: utbetalt brutto } }
 });
 
@@ -177,6 +178,74 @@ export function calcAll(shifts, employers) {
   return out;
 }
 
+// ---------- Skatt og netto ----------
+// emp.pay.tax = { mode: 'default' | 'pct' | 'table' | 'freeOrg', pct, slipGross, slipTax }
+//  default: standard skattetrekk fra innstillingene
+//  pct:     prosenttrekk fra skattekortet
+//  table:   tabelltrekk, anslått ut fra brutto og trekk på en lønnsslipp
+//  freeOrg: skattefri organisasjon – skattefritt inntil 10 000 kr per år fra denne, ellers skattepliktig fra første krone
+// settings.frikort = { on, limit, otherIncome }: ingen trekk til grensen er nådd, deretter 50 % (som når frikortet er brukt opp).
+
+export const FREE_ORG_LIMIT = 10000;
+export const FRIKORT_DEFAULT = 100000;
+
+export function taxPctFor(emp, settings = DEFAULT_SETTINGS) {
+  const t = emp?.pay?.tax || { mode: 'default' };
+  if (t.mode === 'pct') return Number(t.pct) || 0;
+  if (t.mode === 'table') return Number(t.slipGross) > 0 ? Math.min(100, Math.max(0, (Number(t.slipTax) || 0) / Number(t.slipGross) * 100)) : 0;
+  return Number(settings.taxPct) || 0;
+}
+
+// Legger tax og net på hver vakt i all (fra calcAll). Regner per kalenderår, i tidsrekkefølge.
+export function applyTax(all, shifts, employers, settings = DEFAULT_SETTINGS) {
+  const fk = settings.frikort?.on ? settings.frikort : null;
+  const limit = fk ? Number(fk.limit) || FRIKORT_DEFAULT : 0;
+  const empOf = id => employers.find(e => e.id === id);
+  // Årssum per skattefri organisasjon: over grensen blir alt skattepliktig.
+  const orgYear = new Map();
+  for (const s of shifts) {
+    const e = empOf(s.employerId);
+    if (e?.pay?.tax?.mode !== 'freeOrg') continue;
+    const k = `${s.employerId}|${s.date.slice(0, 4)}`;
+    orgYear.set(k, (orgYear.get(k) || 0) + (all.get(s.id)?.pay || 0));
+  }
+  const used = new Map(); // frikort brukt per år
+  const sorted = [...shifts].sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
+  for (const s of sorted) {
+    const c = all.get(s.id); if (!c) continue;
+    const e = empOf(s.employerId), y = s.date.slice(0, 4);
+    const freeOrg = e?.pay?.tax?.mode === 'freeOrg' && (orgYear.get(`${s.employerId}|${y}`) || 0) <= FREE_ORG_LIMIT;
+    let tax = 0;
+    if (!c.pay || freeOrg) tax = 0;
+    else if (fk) {
+      const before = used.has(y) ? used.get(y) : Number(fk.otherIncome) || 0;
+      const after = before + c.pay;
+      used.set(y, after);
+      tax = Math.max(0, after - Math.max(limit, before)) * 0.5;
+    } else tax = c.pay * taxPctFor(e, settings) / 100;
+    c.tax = tax; c.net = c.pay - tax; c.taxFree = freeOrg;
+  }
+  return all;
+}
+
+export function calcAllNet(shifts, employers, settings = DEFAULT_SETTINGS) {
+  return applyTax(calcAll(shifts, employers), shifts, employers, settings);
+}
+
+// Frikort for et år: hvor mye som er brukt til og med en dato, og hva planlagte vakter gir resten av året.
+export function frikortStatus(shifts, employers, settings, year, todayIso) {
+  const fk = settings.frikort; if (!fk?.on) return null;
+  const all = calcAllNet(shifts, employers, settings);
+  const limit = Number(fk.limit) || FRIKORT_DEFAULT;
+  let earned = Number(fk.otherIncome) || 0, planned = 0;
+  for (const s of shifts) {
+    if (!s.date.startsWith(`${year}-`)) continue;
+    const c = all.get(s.id); if (!c || c.taxFree) continue;
+    if (s.date <= todayIso) earned += c.pay; else planned += c.pay;
+  }
+  return { limit, earned, planned, total: earned + planned, left: Math.max(0, limit - earned), overBy: Math.max(0, earned + planned - limit) };
+}
+
 // ---------- Varsler ----------
 
 export function checkRest(shifts, minRestH = DEFAULT_SETTINGS.minRestH) {
@@ -277,6 +346,9 @@ export function validateEmployer(e) {
   if (!name || name.length > 60) errors.push('Navnet må ha 1–60 tegn.');
   const r = Number(e.rate);
   if (payType(e) === 'hourly' && (!Number.isFinite(r) || r < 0 || r > 10000)) errors.push('Timelønn må være mellom 0 og 10 000 kr.');
+  const t = e.pay?.tax;
+  if (t?.mode === 'pct' && !(Number(t.pct) >= 0 && Number(t.pct) <= 60)) errors.push('Prosenttrekket må være mellom 0 og 60 %. Du finner det på skattekortet.');
+  if (t?.mode === 'table' && !(Number(t.slipGross) > 0 && Number(t.slipTax) >= 0 && Number(t.slipTax) < Number(t.slipGross))) errors.push('Skriv inn brutto lønn og skattetrekk fra en lønnsslipp. Trekket må være mindre enn brutto.');
   if (payType(e) === 'fee' && e.pay.feeDefault != null && e.pay.feeDefault !== '' && !(Number(e.pay.feeDefault) >= 0 && Number(e.pay.feeDefault) <= 1000000)) errors.push('Standardhonoraret må være mellom 0 og 1 000 000 kr.');
   for (const rule of e.rules || []) {
     if (!rule.holiday && !(rule.days || []).length) errors.push(`«${rule.label || 'Tillegg'}» må gjelde minst én dag.`);
@@ -387,14 +459,17 @@ export function monthSummary(shifts, employers, ym, settings = DEFAULT_SETTINGS)
   const byEmp = {};
   const total = { hours: 0, supplementPay: 0, overtimePay: 0, pay: 0, count: 0, holidayBase: 0,
     byKind: { hourly: { hours: 0, pay: 0, count: 0 }, fee: { hours: 0, pay: 0, count: 0 }, volunteer: { hours: 0, pay: 0, count: 0 } } };
-  const all = calcAll(shifts, employers);
+  const all = calcAllNet(shifts, employers, settings);
+  total.net = 0;
+  for (const kk of Object.values(total.byKind)) kk.net = 0;
   for (const s of shiftsInMonth(shifts, ym)) {
     const c = all.get(s.id);
     const emp = employers.find(e => e.id === s.employerId);
-    const o = byEmp[s.employerId] ||= { hours: 0, supplementPay: 0, overtimePay: 0, pay: 0, count: 0, supplements: {}, kind: payType(emp) };
+    const o = byEmp[s.employerId] ||= { hours: 0, supplementPay: 0, overtimePay: 0, pay: 0, net: 0, count: 0, supplements: {}, kind: payType(emp) };
+    o.net += c.net; total.net += c.net;
     total.holidayBase += c.holidayBase || 0;
     const k = total.byKind[c.fixed && payType(emp) === 'hourly' ? 'fee' : payType(emp)];
-    k.hours += c.hours; k.pay += c.pay; k.count++;
+    k.hours += c.hours; k.pay += c.pay; k.net += c.net; k.count++;
     const sup = c.supplements.reduce((a, x) => a + x.amount, 0);
     for (const t of [o, total]) {
       t.hours += c.hours; t.supplementPay += sup; t.overtimePay += c.overtimePay; t.pay += c.pay; t.count++;
@@ -405,23 +480,21 @@ export function monthSummary(shifts, employers, ym, settings = DEFAULT_SETTINGS)
     }
   }
   total.holidayPay = total.holidayBase * (Number(settings.holidayPayPct) || 0) / 100;
-  const tax = Number(settings.taxPct) || 0;
-  total.net = tax > 0 ? total.pay * (1 - tax / 100) : null;
   return { byEmp, total };
 }
 
 // Hele året: per måned, per arbeidsgiver og totalt. Regner alle vakter én gang.
 export function yearSummary(shifts, employers, year, settings = DEFAULT_SETTINGS) {
-  const all = calcAll(shifts, employers);
-  const months = Array.from({ length: 12 }, (_, i) => ({ ym: `${year}-${pad(i + 1)}`, hours: 0, pay: 0, count: 0 }));
+  const all = calcAllNet(shifts, employers, settings);
+  const months = Array.from({ length: 12 }, (_, i) => ({ ym: `${year}-${pad(i + 1)}`, hours: 0, pay: 0, net: 0, count: 0 }));
   const byEmp = {};
-  const total = { hours: 0, pay: 0, count: 0, holidayBase: 0 };
+  const total = { hours: 0, pay: 0, net: 0, count: 0, holidayBase: 0 };
   for (const s of shifts) {
     if (!s.date.startsWith(`${year}-`)) continue;
     const c = all.get(s.id), m = months[Number(s.date.slice(5, 7)) - 1];
     total.holidayBase += c.holidayBase || 0;
-    const e = byEmp[s.employerId] ||= { hours: 0, pay: 0, count: 0 };
-    for (const t of [m, e, total]) { t.hours += c.hours; t.pay += c.pay; t.count++; }
+    const e = byEmp[s.employerId] ||= { hours: 0, pay: 0, net: 0, count: 0 };
+    for (const t of [m, e, total]) { t.hours += c.hours; t.pay += c.pay; t.net += c.net; t.count++; }
   }
   total.holidayPay = total.holidayBase * (Number(settings.holidayPayPct) || 0) / 100;
   return { months, byEmp, total };

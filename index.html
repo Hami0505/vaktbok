@@ -96,6 +96,12 @@
 
     <!-- OVERSIKT: måned, år, lønnsslipp og varsler -->
     <div id="v-oversikt" role="tabpanel" aria-labelledby="t-oversikt" hidden>
+      <section class="panel frikort-panel" id="frikortPanel" hidden aria-labelledby="fkTitle">
+        <h2 id="fkTitle">Frikort</h2>
+        <div class="fk-bar" role="img" id="fkBar"><span class="fk-used"></span><span class="fk-planned"></span></div>
+        <p id="fkText"></p>
+        <p class="flag block" id="fkWarn" hidden></p>
+      </section>
       <section class="panel">
         <div class="monthnav">
           <button class="icon-btn" id="prevMonth" type="button" aria-label="Forrige måned">‹</button>
@@ -106,11 +112,11 @@
           <button type="button" role="radio" data-pay="gross" aria-checked="true">Brutto</button>
           <button type="button" role="radio" data-pay="net" aria-checked="false">Netto</button>
         </div>
-        <p class="help" id="netHelp" hidden>Legg inn skattetrekket ditt under <button class="btn link inline" type="button" data-action="go-settings">Konto → Innstillinger</button> for å se netto.</p>
+        <p class="help" id="netHelp" hidden>Du har ikke lagt inn skattetrekk ennå, så netto er lik brutto. Legg inn standard skattetrekk eller frikort under <button class="btn link inline" type="button" data-action="go-settings">Konto → Innstillinger</button>, eller trekk per arbeidsgiver.</p>
         <div class="totals" id="totals"></div>
         <p class="small muted" id="kindSplit"></p>
         <div class="scroll"><table id="empTable"></table></div>
-        <p class="small muted">Estimat før skatt. Tillegg, overtid og feriepenger regnes etter reglene du har lagt inn per arbeidsgiver. Sjekk alltid mot lønnsslippen.</p>
+        <p class="small muted">Estimat. Tillegg, overtid, feriepenger og skatt regnes etter reglene du har lagt inn. Sjekk alltid mot lønnsslippen.</p>
         <div class="row">
           <button class="btn" id="csvBtn" type="button">Last ned regneark (CSV)</button>
           <button class="btn" id="icsBtn" type="button">Legg i kalenderen (.ics)</button>
@@ -163,8 +169,17 @@
           </label>
           <label>Minste hviletid mellom vakter (timer)<input type="number" id="sRest" min="0" max="24" step="0.5" inputmode="decimal"></label>
           <label>Varsle når uka passerer (timer)<input type="number" id="sWeek" min="1" max="168" step="1" inputmode="numeric"></label>
-          <label>Skattetrekk i prosent (valgfritt)<input type="number" id="sTax" min="0" max="60" step="0.5" inputmode="decimal" placeholder="F.eks. 30" aria-describedby="taxHelp">
-            <span class="help" id="taxHelp">Fra skattekortet. Gir et omtrentlig netto under Oversikt.</span></label>
+          <label>Standard skattetrekk (%)<input type="number" id="sTax" min="0" max="60" step="0.5" inputmode="decimal" placeholder="F.eks. 30" aria-describedby="taxHelp">
+            <span class="help" id="taxHelp">Brukes for arbeidsgivere uten eget valg. Du kan sette prosent- eller tabelltrekk per arbeidsgiver.</span></label>
+          <fieldset class="span-all frikort-box">
+            <legend>Frikort</legend>
+            <label class="check"><input type="checkbox" id="sFkOn"> Jeg har frikort i år</label>
+            <div class="grid" id="sFkFields" hidden>
+              <label>Grense (kr)<input type="number" id="sFkLimit" min="0" step="1000" inputmode="numeric" placeholder="100000"></label>
+              <label>Inntekt i år utenfor Vaktbok (kr)<input type="number" id="sFkOther" min="0" step="100" inputmode="numeric" placeholder="0" aria-describedby="fkHelp">
+                <span class="help" id="fkHelp">Lønn før du begynte med Vaktbok, og feriepenger som utbetales i år. Begge teller mot frikortet.</span></label>
+            </div>
+          </fieldset>
         </form>
         <ul class="errors" id="settingsErrors" role="alert"></ul>
       </section>
@@ -188,7 +203,7 @@
   </main>
   <footer class="foot small muted">
     <span class="foot-links"><a href="#om" data-action="show-landing">Om Vaktbok</a><a href="personvern.html">Personvern</a><a id="contactLink" hidden></a></span>
-    <span>Lønn er et estimat før skatt. Sjekk alltid mot lønnsslippen.</span>
+    <span>Lønn og skatt er estimater. Sjekk alltid mot lønnsslippen.</span>
   </footer>
 </div>
 
@@ -287,6 +302,26 @@
         <label>Tillegg (%)<input type="number" id="eOtPct" min="0" max="300" step="1" inputmode="numeric"></label>
         <p class="help span-all">Arbeidsmiljøloven regner som hovedregel arbeid over 9 timer i døgnet eller 40 timer i uka som overtid, med minst 40 % tillegg. Tom grense betyr av. Overtid regnes per arbeidsgiver.</p>
       </div>
+    </fieldset>
+
+    <fieldset id="taxBox">
+      <legend>Skattetrekk</legend>
+      <label>Hvordan trekker denne arbeidsgiveren skatt?
+        <select id="eTaxMode">
+          <option value="default">Som standard under Konto</option>
+          <option value="pct">Prosenttrekk (fra skattekortet)</option>
+          <option value="table">Tabelltrekk (anslås fra en lønnsslipp)</option>
+          <option value="freeOrg">Skattefri organisasjon (frivillig eller ideell)</option>
+        </select>
+      </label>
+      <div class="grid" id="eTaxPctBox" hidden>
+        <label>Prosenttrekk (%)<input type="number" id="eTaxPct" min="0" max="60" step="0.5" inputmode="decimal"></label>
+      </div>
+      <div class="grid" id="eTaxTableBox" hidden>
+        <label>Brutto på en lønnsslipp (kr)<input type="number" id="eSlipGross" min="0" step="1" inputmode="decimal"></label>
+        <label>Skattetrekk på samme slipp (kr)<input type="number" id="eSlipTax" min="0" step="1" inputmode="decimal"></label>
+      </div>
+      <p class="help" id="eTaxHelp"></p>
     </fieldset>
 
     <label class="check"><input type="checkbox" id="eArchived"> Skjul ved ny vakt (tidligere vakter beholdes)</label>

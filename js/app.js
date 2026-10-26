@@ -30,9 +30,11 @@ const store = new Store(config);
 
 // Brutto eller netto i visningene. Netto krever at skattetrekk er lagt inn.
 const taxPct = () => Number(D().settings.taxPct) || 0;
-const showNet = () => D().settings.showNet === true && taxPct() > 0;
-const shown = gross => showNet() ? gross * (1 - taxPct() / 100) : gross;
-const payWord = () => showNet() ? `ca. netto (${num(taxPct(), 1)} % skatt)` : 'estimert brutto';
+const showNet = () => D().settings.showNet === true;
+// Har brukeren lagt inn noe som gir skattetrekk? Ellers er netto lik brutto, og vi sier fra.
+const hasTaxSetup = () => taxPct() > 0 || D().settings.frikort?.on || D().employers.some(e => e.pay?.tax && e.pay.tax.mode !== 'default');
+const money = o => showNet() ? (o.net ?? o.pay) : o.pay;
+const payWord = () => showNet() ? 'ca. netto' : 'estimert brutto';
 
 // Gjør tekniske feilmeldinger (ofte på engelsk fra serveren) om til noe brukeren forstår.
 function friendlyError(e) {
@@ -168,7 +170,7 @@ function renderWeek() {
   $('todayBtn').hidden = L.isoDate(L.mondayOf(new Date())) === L.isoDate(ws);
 
   const warns = L.restWarnings(D().shifts, D().employers, D().settings.minRestH);
-  ui.calc = L.calcAll(D().shifts, D().employers);
+  ui.calc = L.calcAllNet(D().shifts, D().employers, D().settings);
   const from = L.isoDate(addDays(ws, -1)), to = L.isoDate(we);
   const near = D().shifts.filter(s => s.date >= from && s.date <= to);
   let html = '';
@@ -190,8 +192,8 @@ function renderWeek() {
   const inWeek = D().shifts.filter(s => s.date >= L.isoDate(ws) && s.date <= to)
     .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
   let h = 0, pay = 0;
-  for (const s of inWeek) { const c = ui.calc.get(s.id); h += c.hours; pay += c.pay; }
-  $('weekSum').innerHTML = inWeek.length ? `<b>${hrs(h)}</b> og <b>${kr(shown(pay))}</b> ${payWord()} denne uka` : '';
+  for (const s of inWeek) { const c = ui.calc.get(s.id); h += c.hours; pay += money(c); }
+  $('weekSum').innerHTML = inWeek.length ? `<b>${hrs(h)}</b> og <b>${kr(pay)}</b> ${payWord()} denne uka` : '';
 
   if (!D().employers.length) {
     $('weekList').innerHTML = `<div class="empty"><p>Legg inn arbeidsgiverne dine først, med timelønn og tillegg.</p>
@@ -211,7 +213,7 @@ function shiftItem(s, warn, actions) {
       <span class="who"><span class="dot" style="background:${safeColor(emp?.color)}"></span>${esc(emp ? emp.name : 'Ukjent')}${s.seriesId ? '<span class="series-mark" title="Gjentakende vakt" aria-label="gjentakende"> ↻</span>' : ''}</span>
       <span class="num">${hrs(c.hours)}</span>
       <span class="meta">${fmtDay(s.date)} ${s.start}–${s.end}${s.breakMin ? `, pause ${s.breakMin} min` : ''}${s.note ? `, ${esc(s.note)}` : ''}</span>
-      <span class="meta num">${c.kind === 'volunteer' && !c.pay ? 'Frivillig' : kr(shown(c.pay))}${c.overtimeH > 0 ? `, ${hrs(c.overtimeH)} overtid` : ''}</span>
+      <span class="meta num">${c.kind === 'volunteer' && !c.pay ? 'Frivillig' : kr(money(c))}${c.overtimeH > 0 ? `, ${hrs(c.overtimeH)} overtid` : ''}</span>
     </button>
     ${warn ? `<div class="flag ${warn.type}">${esc(warningText(warn))}</div>` : ''}
     ${actions ? `<div class="acts"><button class="btn link" data-action="copy-shift" data-id="${s.id}" data-days="1">Kopier til neste dag</button><button class="btn link" data-action="copy-shift" data-id="${s.id}" data-days="7">Kopier til neste uke</button></div>` : ''}
@@ -484,7 +486,7 @@ function renderEmployers() {
     return `<div class="item"><button class="open" data-action="edit-emp" data-id="${e.id}" aria-label="Endre ${esc(e.name)}">
       <span class="who"><span class="dot" style="background:${safeColor(e.color)}"></span>${esc(e.name)}${e.archived ? ' <span class="small muted">(skjult)</span>' : ''}</span>
       <span class="num">${payLabel(e)}</span>
-      <span class="meta">${L.payType(e) === 'hourly' ? (rules.length ? rules.map(esc).join('<br>') : 'Ingen tillegg') : esc(L.payType(e) === 'fee' ? `Honorar per oppdrag${L.givesHolidayPay(e) ? ', gir feriepenger' : ''}` : `Frivillig arbeid${e.pay?.inWarnings === false ? ', utenfor varsler om hviletid' : ''}`)}${L.payType(e) === 'hourly' && !(Number(e.rate) > 0) ? '<br><span class="flag missing">Mangler timelønn, trykk for å legge inn</span>' : ''}</span>
+      <span class="meta">${e.pay?.tax ? `<span class="small">${esc({ pct: `Prosenttrekk ${num(e.pay.tax.pct, 1)} %`, table: `Tabelltrekk, ca. ${num(L.taxPctFor(e), 1)} %`, freeOrg: 'Skattefri organisasjon (inntil 10 000 kr/år)' }[e.pay.tax.mode] || '')}</span><br>` : ''}${L.payType(e) === 'hourly' ? (rules.length ? rules.map(esc).join('<br>') : 'Ingen tillegg') : esc(L.payType(e) === 'fee' ? `Honorar per oppdrag${L.givesHolidayPay(e) ? ', gir feriepenger' : ''}` : `Frivillig arbeid${e.pay?.inWarnings === false ? ', utenfor varsler om hviletid' : ''}`)}${L.payType(e) === 'hourly' && !(Number(e.rate) > 0) ? '<br><span class="flag missing">Mangler timelønn, trykk for å legge inn</span>' : ''}</span>
       <span class="meta num">${n} ${n === 1 ? 'vakt' : 'vakter'}</span></button></div>`;
   }).join('');
 }
@@ -510,7 +512,10 @@ function openEmp(e = null) {
   $('eFee').value = e?.pay?.feeDefault ?? '';
   $('eHoliday').checked = e ? L.givesHolidayPay(e) : false;
   $('eWarn').checked = e?.pay?.inWarnings !== false;
-  renderRules(); toggleOt(); togglePayType();
+  const tx = e?.pay?.tax || { mode: 'default' };
+  $('eTaxMode').value = tx.mode || 'default';
+  $('eTaxPct').value = tx.pct ?? ''; $('eSlipGross').value = tx.slipGross ?? ''; $('eSlipTax').value = tx.slipTax ?? '';
+  renderRules(); toggleOt(); togglePayType(); toggleTax();
   $('empErrors').innerHTML = '';
   $('empDialog').showModal();
 }
@@ -559,6 +564,20 @@ function togglePayType() {
   $('eHolidayL').hidden = t !== 'fee';
   $('eWarnL').hidden = t !== 'volunteer';
   $('rulesBox').hidden = $('otBox').hidden = t !== 'hourly';
+  $('taxBox').hidden = t === 'volunteer';
+}
+
+function toggleTax() {
+  const m = $('eTaxMode').value;
+  $('eTaxPctBox').hidden = m !== 'pct';
+  $('eTaxTableBox').hidden = m !== 'table';
+  const g = Number($('eSlipGross').value), t = Number($('eSlipTax').value);
+  $('eTaxHelp').textContent = {
+    default: `Bruker standard skattetrekk fra Konto (${num(taxPct(), 1)} %)${D().settings.frikort?.on ? ', eller frikortet så lenge det rekker' : ''}.`,
+    pct: 'Står på skattekortet ditt. Arbeidsgivere som ikke er hovedarbeidsgiver, bruker vanligvis prosenttrekk.',
+    table: g > 0 && t >= 0 && t < g ? `Tilsvarer ca. ${num(t / g * 100, 1)} % trekk. Bruk en vanlig lønnsslipp, uten feriepenger eller etterbetaling.` : 'Hovedarbeidsgiveren bruker vanligvis tabelltrekk. Skriv inn brutto og trekk fra en vanlig lønnsslipp, så anslår Vaktbok trekket.',
+    freeOrg: 'Inntil 10 000 kr i året fra en skattefri organisasjon er skattefritt. Går du over, blir hele beløpet skattepliktig, ikke bare det som er over.',
+  }[m];
 }
 
 function saveEmp(ev) {
@@ -574,8 +593,14 @@ function saveEmp(ev) {
     archived: $('eArchived').checked,
   };
   const t = ui.payType || 'hourly';
-  e.pay = t === 'fee' ? { type: 'fee', feeDefault: $('eFee').value === '' ? null : Number($('eFee').value), holidayPay: $('eHoliday').checked }
-    : t === 'volunteer' ? { type: 'volunteer', inWarnings: $('eWarn').checked } : null;
+  const m = $('eTaxMode').value;
+  const tax = t === 'volunteer' || m === 'default' ? null
+    : m === 'pct' ? { mode: 'pct', pct: Number($('eTaxPct').value) }
+    : m === 'table' ? { mode: 'table', slipGross: Number($('eSlipGross').value), slipTax: Number($('eSlipTax').value) }
+    : { mode: 'freeOrg' };
+  e.pay = t === 'fee' ? { type: 'fee', feeDefault: $('eFee').value === '' ? null : Number($('eFee').value), holidayPay: $('eHoliday').checked, ...(tax ? { tax } : {}) }
+    : t === 'volunteer' ? { type: 'volunteer', inWarnings: $('eWarn').checked }
+    : tax ? { type: 'hourly', tax } : null;
   if (t !== 'hourly') e.rate = 0;
   else if ($('eRate').value === '') e.rate = NaN;
   const errs = L.validateEmployer(e);
@@ -593,13 +618,13 @@ function renderMonth() {
   const { byEmp, total } = L.monthSummary(D().shifts, D().employers, ui.month, D().settings);
   $('totals').innerHTML = `
     <div><b>${hrs(total.hours)}</b><span>${total.count} vakter</span></div>
-    <div><b>${kr(shown(total.pay))}</b><span>${payWord()[0].toUpperCase() + payWord().slice(1)}</span></div>
+    <div><b>${kr(money(total))}</b><span>${payWord()[0].toUpperCase() + payWord().slice(1)}</span></div>
     <div><b>${kr(total.holidayPay)}</b><span>Feriepenger opptjent${showNet() ? ' (brutto)' : ''}</span></div>`;
   renderPaySeg();
   const bk = total.byKind, parts = [];
   if (bk.fee.count || bk.volunteer.count) {
-    if (bk.hourly.count) parts.push(`Timelønn: ${hrs(bk.hourly.hours)}, ${kr(shown(bk.hourly.pay))}`);
-    if (bk.fee.count) parts.push(`Honorar og faste beløp: ${bk.fee.count} ${bk.fee.count === 1 ? 'oppdrag' : 'oppdrag'}, ${kr(shown(bk.fee.pay))}`);
+    if (bk.hourly.count) parts.push(`Timelønn: ${hrs(bk.hourly.hours)}, ${kr(money(bk.hourly))}`);
+    if (bk.fee.count) parts.push(`Honorar og faste beløp: ${bk.fee.count} ${bk.fee.count === 1 ? 'oppdrag' : 'oppdrag'}, ${kr(money(bk.fee))}`);
     if (bk.volunteer.count) parts.push(`Frivillig: ${hrs(bk.volunteer.hours)}`);
   }
   $('kindSplit').textContent = parts.join('. ');
@@ -613,9 +638,9 @@ function renderMonth() {
         const e = empById(id), o = byEmp[id];
         const subs = Object.values(o.supplements).filter(x => x.hours > 0).map(x => `${esc(x.label)} ${hrs(x.hours)}`).join(', ');
         return `<tr><td><span class="cell-who"><span class="dot" style="background:${safeColor(e?.color)}"></span>${esc(e?.name || 'Ukjent')}</span>${subs ? `<span class="sub">${subs}</span>` : ''}</td>
-          <td>${o.count}</td><td>${hrs(o.hours)}</td><td>${kr(o.supplementPay)}</td><td>${o.overtimePay ? kr(o.overtimePay) : '–'}</td><td>${o.kind === 'volunteer' && !o.pay ? 'Frivillig' : kr(shown(o.pay))}</td></tr>`;
+          <td>${o.count}</td><td>${hrs(o.hours)}</td><td>${kr(o.supplementPay)}</td><td>${o.overtimePay ? kr(o.overtimePay) : '–'}</td><td>${o.kind === 'volunteer' && !o.pay ? 'Frivillig' : kr(money(o))}</td></tr>`;
       }).join('')
-      + `</tbody><tfoot><tr><td>Sum</td><td>${total.count}</td><td>${hrs(total.hours)}</td><td>${kr(total.supplementPay)}</td><td>${total.overtimePay ? kr(total.overtimePay) : '–'}</td><td>${kr(shown(total.pay))}</td></tr></tfoot>`;
+      + `</tbody><tfoot><tr><td>Sum</td><td>${total.count}</td><td>${hrs(total.hours)}</td><td>${kr(total.supplementPay)}</td><td>${total.overtimePay ? kr(total.overtimePay) : '–'}</td><td>${kr(money(total))}</td></tr></tfoot>`;
   }
   const chosen = $('sheetEmp').value;
   $('sheetEmp').innerHTML = ids.map(id => `<option value="${id}">${esc(empById(id)?.name)}</option>`).join('')
@@ -625,6 +650,7 @@ function renderMonth() {
   $('csvBtn').disabled = $('sheetBtn').disabled = $('icsBtn').disabled = !ids.length;
   renderPayslips(byEmp, ids);
   renderYear(y);
+  renderFrikort(y);
   $('pdfBtn').disabled = !ids.length;
 
   const warns = L.restWarnings(D().shifts, D().employers, D().settings.minRestH);
@@ -638,13 +664,33 @@ function renderMonth() {
 function renderPaySeg() {
   const net = D().settings.showNet === true;
   document.querySelectorAll('.seg [data-pay]').forEach(b => b.setAttribute('aria-checked', String((b.dataset.pay === 'net') === net)));
-  $('netHelp').hidden = !(net && !taxPct());
+  $('netHelp').hidden = !(net && !hasTaxSetup());
 }
 
 function yearInfoText(m, i) {
   return m.count
-    ? `<b>${MONTH[i][0].toUpperCase() + MONTH[i].slice(1)}:</b> ${hrs(m.hours)}, ${kr(shown(m.pay))} ${payWord()}, ${m.count} ${m.count === 1 ? 'vakt' : 'vakter'}`
+    ? `<b>${MONTH[i][0].toUpperCase() + MONTH[i].slice(1)}:</b> ${hrs(m.hours)}, ${kr(money(m))} ${payWord()}, ${m.count} ${m.count === 1 ? 'vakt' : 'vakter'}`
     : `<b>${MONTH[i][0].toUpperCase() + MONTH[i].slice(1)}:</b> ingen vakter`;
+}
+
+function renderFrikort(year) {
+  const st = L.frikortStatus(D().shifts, D().employers, D().settings, String(year), L.isoDate(new Date()));
+  $('frikortPanel').hidden = !st;
+  if (!st) return;
+  $('fkTitle').textContent = `Frikort ${year}`;
+  const used = Math.min(1, st.earned / st.limit) * 100, all = Math.min(1, st.total / st.limit) * 100;
+  const bar = $('fkBar');
+  bar.querySelector('.fk-used').style.width = `${used}%`;
+  Object.assign(bar.querySelector('.fk-planned').style, { left: `${used}%`, width: `${Math.max(0, all - used)}%` });
+  bar.classList.toggle('over', st.earned > st.limit);
+  bar.setAttribute('aria-label', `${kr(st.earned)} av ${kr(st.limit)} brukt`);
+  $('fkText').innerHTML = `<b>${kr(st.earned)}</b> av ${kr(st.limit)} brukt. ${st.planned ? `Planlagte vakter resten av året: ${kr(st.planned)}.` : ''} ${st.left ? `Igjen: <b>${kr(st.left)}</b>.` : ''}`;
+  const w = $('fkWarn');
+  let msg = '', cls = 'rest';
+  if (st.earned > st.limit) { msg = `Du har passert grensen med ${kr(st.earned - st.limit)}. Uten skattekort trekker arbeidsgiveren 50 % av det som er over. Bestill skattekort på skatteetaten.no.`; cls = 'overlap'; }
+  else if (st.overBy > 0) msg = `Med vaktene du har planlagt, går du over grensen med ca. ${kr(st.overBy)}. Bestill skattekort på skatteetaten.no før du når den, så slipper du 50 % trekk.`;
+  else if (st.earned >= st.limit * 0.8) msg = 'Du har brukt over 80 % av frikortet. Følg med, og bestill skattekort hvis du kommer til å tjene mer.';
+  w.hidden = !msg; w.className = `flag block ${cls}`; w.textContent = msg;
 }
 
 function renderYear(y) {
@@ -653,21 +699,21 @@ function renderYear(y) {
   $('yearTitle').textContent = `Hele ${y}`;
   $('yearTotals').innerHTML = `
     <div><b>${hrs(total.hours)}</b><span>${total.count} vakter</span></div>
-    <div><b>${kr(shown(total.pay))}</b><span>${payWord()[0].toUpperCase() + payWord().slice(1)}</span></div>
+    <div><b>${kr(money(total))}</b><span>${payWord()[0].toUpperCase() + payWord().slice(1)}</span></div>
     <div><b>${kr(total.holidayPay)}</b><span>Feriepenger opptjent${showNet() ? ' (brutto)' : ''}</span></div>`;
   const max = Math.max(...months.map(m => m.pay), 1);
   // Hver søyle er en knapp: hold over eller fokuser for å se tallene, trykk for å åpne måneden.
   $('yearChart').removeAttribute('role');
   $('yearChart').innerHTML = months.map((m, i) =>
     `<button type="button" class="col${m.ym === ui.month ? ' now' : ''}" data-ym="${m.ym}" data-i="${i}"
-      aria-label="${MONTH[i]}: ${m.count ? `${hrs(m.hours)}, ${kr(shown(m.pay))}` : 'ingen vakter'}. Trykk for å vise måneden."${m.ym === ui.month ? ' aria-current="true"' : ''}>
+      aria-label="${MONTH[i]}: ${m.count ? `${hrs(m.hours)}, ${kr(money(m))}` : 'ingen vakter'}. Trykk for å vise måneden."${m.ym === ui.month ? ' aria-current="true"' : ''}>
       <span class="bar" style="height:${Math.round(m.pay / max * 100)}%"></span><span class="m">${MONTH[i].slice(0, 1).toUpperCase()}</span></button>`).join('');
   const cur = months.findIndex(m => m.ym === ui.month);
   $('yearInfo').innerHTML = cur >= 0 ? yearInfoText(months[cur], cur) : '';
   const ids = Object.keys(byEmp);
   $('yearTable').innerHTML = ids.length ? `<thead><tr><th>Arbeidsgiver</th><th>Vakter</th><th>Timer</th><th>${showNet() ? 'Ca. netto' : 'Estimert'}</th></tr></thead><tbody>`
     + ids.map(id => { const e = empById(id), o = byEmp[id];
-      return `<tr><td><span class="cell-who"><span class="dot" style="background:${safeColor(e?.color)}"></span>${esc(e?.name || 'Ukjent')}</span></td><td>${o.count}</td><td>${hrs(o.hours)}</td><td>${L.payType(e) === 'volunteer' && !o.pay ? 'Frivillig' : kr(shown(o.pay))}</td></tr>`; }).join('')
+      return `<tr><td><span class="cell-who"><span class="dot" style="background:${safeColor(e?.color)}"></span>${esc(e?.name || 'Ukjent')}</span></td><td>${o.count}</td><td>${hrs(o.hours)}</td><td>${L.payType(e) === 'volunteer' && !o.pay ? 'Frivillig' : kr(money(o))}</td></tr>`; }).join('')
     + '</tbody>' : '';
 }
 
@@ -756,6 +802,10 @@ function renderAccount() {
   $('sRest').value = s.minRestH;
   $('sWeek').value = s.weekLimitH;
   $('sTax').value = s.taxPct || '';
+  $('sFkOn').checked = !!s.frikort?.on;
+  $('sFkFields').hidden = !s.frikort?.on;
+  $('sFkLimit').value = s.frikort?.limit ?? L.FRIKORT_DEFAULT;
+  $('sFkOther').value = s.frikort?.otherIncome || '';
   $('dataNote').textContent = store.user
     ? 'Dataene dine lagres på server i EU og synkes til enhetene der du er logget inn. Du kan laste ned eller slette alt når som helst.'
     : 'Alt lagres i denne nettleseren. Sletter du nettleserdata, forsvinner vaktene. Last ned en kopi jevnlig.';
@@ -947,6 +997,7 @@ $('presetBtn').addEventListener('click', () => {
   renderRules(); toast('Fyll inn beløpene fra avtalen din');
 });
 $('eOtOn').addEventListener('change', toggleOt);
+for (const id of ['eTaxMode', 'eSlipGross', 'eSlipTax']) $(id).addEventListener('input', toggleTax);
 document.querySelectorAll('[data-paytype]').forEach(b => b.addEventListener('click', () => {
   ui.payType = b.dataset.paytype;
   if (ui.payType === 'fee' && !ui.emp) $('eHoliday').checked = false;
@@ -1008,16 +1059,23 @@ $('sheetBtn').addEventListener('click', async () => {
 });
 
 $('settingsForm').addEventListener('change', () => {
-  const f = { rest: $('sRest'), week: $('sWeek'), tax: $('sTax') };
+  $('sFkFields').hidden = !$('sFkOn').checked;
+  const f = { rest: $('sRest'), week: $('sWeek'), tax: $('sTax'), fkLimit: $('sFkLimit'), fkOther: $('sFkOther') };
   const rest = Number(f.rest.value), week = Number(f.week.value), tax = f.tax.value === '' ? 0 : Number(f.tax.value);
   const errs = [];
   const check = (el, ok, msg) => { el.setAttribute('aria-invalid', String(!ok)); if (!ok) errs.push(msg); };
   check(f.rest, f.rest.value !== '' && rest >= 0 && rest <= 24, 'Minste hviletid må være mellom 0 og 24 timer. Arbeidsmiljøloven bruker 11 timer som hovedregel.');
   check(f.week, f.week.value !== '' && week >= 1 && week <= 168, 'Ukegrensen må være mellom 1 og 168 timer. 48 timer er vanlig.');
   check(f.tax, tax >= 0 && tax <= 60, 'Skattetrekket må være mellom 0 og 60 prosent. Du finner det på skattekortet ditt.');
+  const fkOn = $('sFkOn').checked, fkLimit = f.fkLimit.value === '' ? L.FRIKORT_DEFAULT : Number(f.fkLimit.value), fkOther = f.fkOther.value === '' ? 0 : Number(f.fkOther.value);
+  if (fkOn) {
+    check(f.fkLimit, fkLimit >= 1000 && fkLimit <= 1000000, 'Frikortgrensen må være mellom 1 000 og 1 000 000 kr. For 2026 er den 100 000 kr.');
+    check(f.fkOther, fkOther >= 0 && fkOther <= 10000000, 'Inntekt utenfor Vaktbok må være 0 kr eller mer.');
+  }
   $('settingsErrors').innerHTML = errs.map(x => `<li>${esc(x)}</li>`).join('');
   if (errs.length) return;
-  store.updateSettings({ holidayPayPct: Number($('sHoliday').value), minRestH: rest, weekLimitH: week, taxPct: tax });
+  store.updateSettings({ holidayPayPct: Number($('sHoliday').value), minRestH: rest, weekLimitH: week, taxPct: tax,
+    frikort: fkOn ? { on: true, limit: fkLimit, otherIncome: fkOther } : (D().settings.frikort ? { ...D().settings.frikort, on: false } : null) });
   toast('Innstillingene er lagret');
 });
 
