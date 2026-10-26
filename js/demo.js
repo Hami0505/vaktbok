@@ -38,16 +38,21 @@ export function makeDemo({ rand = Math.random, newId, today = new Date() }) {
   const ws = mondayOf(today);
   const shifts = [];
   let lastEnd = 0;
+  // Hver arbeidsgiver brukes to ganger i tilfeldig rekkefølge før resten fordeles fritt,
+  // så alle får minst to vakter.
+  const deck = [...employers, ...employers].sort(() => rand() - 0.5);
+  const nextEmployer = () => (deck.length ? deck.pop() : pick(employers)).id;
   for (let n = -14; n < 14; n++) {
     const inThisWeek = n >= 0 && n < 7;
     if (rand() > (inThisWeek ? 0.6 : 0.45)) continue;
     const day = new Date(ws.getFullYear(), ws.getMonth(), ws.getDate() + n);
     const [start, end, breakMin] = pick(TYPES);
-    const s = { id: newId(), employerId: pick(employers).id, date: isoDate(day), start, end, breakMin, note: pick(NOTES) };
+    const s = { id: newId(), employerId: '', date: isoDate(day), start, end, breakMin, note: pick(NOTES) };
     const t = parseShift(s);
     const gapH = (t.start - lastEnd) / HOUR;
     if (gapH < 0) continue;
     if (gapH < 11 && rand() > 0.25) continue;
+    s.employerId = nextEmployer();
     shifts.push(s);
     lastEnd = t.end.getTime();
   }
@@ -55,5 +60,18 @@ export function makeDemo({ rand = Math.random, newId, today = new Date() }) {
     const day = isoDate(new Date(ws.getFullYear(), ws.getMonth(), ws.getDate() + 2));
     if (!shifts.some(s => s.date === day)) shifts.push({ id: newId(), employerId: employers[0].id, date: day, start: '08:00', end: '16:00', breakMin: 30, note: '' });
   }
+  // Reserve (sjelden): legg dagvakter på ledige dager til alle har minst to.
+  const used = new Set(shifts.map(s => s.date));
+  for (const e of employers) {
+    let have = shifts.filter(s => s.employerId === e.id).length;
+    for (let n = 0; have < 2 && n < 21; n++) {
+      const date = isoDate(new Date(ws.getFullYear(), ws.getMonth(), ws.getDate() + n));
+      const prev = isoDate(new Date(ws.getFullYear(), ws.getMonth(), ws.getDate() + n - 1));
+      if (used.has(date) || used.has(prev)) continue; // unngå natt fra dagen før
+      shifts.push({ id: newId(), employerId: e.id, date, start: '08:00', end: '16:00', breakMin: 30, note: '' });
+      used.add(date); have++;
+    }
+  }
+  shifts.sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
   return { employers, shifts };
 }

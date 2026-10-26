@@ -237,7 +237,7 @@ test('eksempeldata er tilfeldige, gyldige og uten overlapp', async () => {
   const { makeDemo } = await import('../js/demo.js');
   const seeded = seed => () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
   let i = 0; const id = () => `id-${++i}`;
-  const runs = [1, 2, 3, 42, 99].map(n => makeDemo({ rand: seeded(n), newId: id, today: new Date(2026, 9, 26) }));
+  const runs = Array.from({ length: 200 }, (_, n) => n + 1).map(n => makeDemo({ rand: seeded(n), newId: id, today: new Date(2026, 9, 26) }));
   for (const { employers, shifts } of runs) {
     assert.ok(employers.length >= 2 && employers.length <= 3);
     for (const e of employers) assert.deepEqual(L.validateEmployer(e), []);
@@ -245,6 +245,7 @@ test('eksempeldata er tilfeldige, gyldige og uten overlapp', async () => {
     const w = L.checkRest(shifts, 11);
     assert.ok(!Object.values(w).some(x => x.type === 'overlap'), 'ingen overlapp');
     assert.ok(shifts.some(s => s.date >= '2026-10-26' && s.date <= '2026-11-01'), 'minst én vakt denne uka');
+    for (const e of employers) assert.ok(shifts.filter(s => s.employerId === e.id).length >= 2, `${e.name} har minst to vakter`);
   }
   const sig = r => r.employers.map(e => e.name + e.rate).join() + r.shifts.length;
   assert.ok(new Set(runs.map(sig)).size > 1, 'ulike data hver gang');
@@ -276,4 +277,18 @@ test('fødselsnummer oppdages også rett etter bokstaver (uten lookbehind)', () 
   assert.ok(L.noteLooksSensitive(`nr:${fnr}`));
   assert.ok(L.noteLooksSensitive(`a${fnr}`));
   assert.ok(L.noteLooksSensitive(`${fnr} og ${fnr}`));
+});
+
+test('timeliste for alle arbeidsgivere, gruppert med summer', () => {
+  const shifts = [
+    S({ date: '2026-10-21', start: '08:00', end: '16:00', breakMin: 30 }),
+    S({ employerId: 'e2', date: '2026-10-22', start: '08:00', end: '12:00' }),
+    S({ date: '2026-10-23', start: '08:00', end: '12:00' }),
+  ];
+  const t = L.toTimesheet(shifts, [emp, emp2], '2026-10', 'all');
+  assert.match(t, /alle arbeidsgivere/);
+  assert.match(t, /Sum A: 11,50 timer \(2 vakter\)/);
+  assert.match(t, /Sum B: 4,00 timer \(1 vakter\)/);
+  assert.match(t, /Totalt: 15,50 timer \(3 vakter\)/);
+  assert.ok(!/Totalt/.test(L.toTimesheet(shifts, [emp, emp2], '2026-10', 'e1')), 'én arbeidsgiver har ingen totallinje');
 });

@@ -60,7 +60,7 @@
   <nav aria-label="Hovedmeny">
     <div class="tabs" role="tablist">
     <button role="tab" id="t-uke" data-tab="uke" aria-selected="true" aria-controls="v-uke">Uke</button>
-    <button role="tab" id="t-maned" data-tab="maned" aria-selected="false" tabindex="-1" aria-controls="v-maned">Måned</button>
+    <button role="tab" id="t-oversikt" data-tab="oversikt" aria-selected="false" tabindex="-1" aria-controls="v-oversikt">Oversikt</button>
     <button role="tab" id="t-arbeidsgivere" data-tab="arbeidsgivere" aria-selected="false" tabindex="-1" aria-controls="v-arbeidsgivere">Arbeidsgivere</button>
     <button role="tab" id="t-konto" data-tab="konto" aria-selected="false" tabindex="-1" aria-controls="v-konto">Konto</button>
     </div>
@@ -93,8 +93,8 @@
       </section>
     </div>
 
-    <!-- MÅNED -->
-    <div id="v-maned" role="tabpanel" aria-labelledby="t-maned" hidden>
+    <!-- OVERSIKT: måned, år, lønnsslipp og varsler -->
+    <div id="v-oversikt" role="tabpanel" aria-labelledby="t-oversikt" hidden>
       <section class="panel">
         <div class="monthnav">
           <button class="icon-btn" id="prevMonth" type="button" aria-label="Forrige måned">‹</button>
@@ -107,7 +107,7 @@
         <div class="row">
           <button class="btn" id="csvBtn" type="button">Last ned regneark (CSV)</button>
           <button class="btn" id="icsBtn" type="button">Legg i kalenderen (.ics)</button>
-          <select id="sheetEmp" class="inline-select" aria-label="Arbeidsgiver for timeliste"></select>
+          <select id="sheetEmp" class="inline-select" aria-label="Timeliste for"></select>
           <button class="btn" id="sheetBtn" type="button">Kopier timeliste</button>
           <button class="btn" id="pdfBtn" type="button">Timeliste som PDF</button>
         </div>
@@ -156,7 +156,7 @@
           <label>Minste hviletid mellom vakter (timer)<input type="number" id="sRest" min="0" max="24" step="0.5" inputmode="decimal"></label>
           <label>Varsle når uka passerer (timer)<input type="number" id="sWeek" min="1" max="168" step="1" inputmode="numeric"></label>
           <label>Skattetrekk i prosent (valgfritt)<input type="number" id="sTax" min="0" max="60" step="0.5" inputmode="decimal" placeholder="F.eks. 30" aria-describedby="taxHelp">
-            <span class="help" id="taxHelp">Fra skattekortet. Gir et omtrentlig netto i månedsoversikten.</span></label>
+            <span class="help" id="taxHelp">Fra skattekortet. Gir et omtrentlig netto under Oversikt.</span></label>
         </form>
       </section>
 

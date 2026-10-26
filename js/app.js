@@ -95,7 +95,7 @@ function setTab(tab) {
     b.setAttribute('aria-selected', String(on));
     b.tabIndex = on ? 0 : -1;
   });
-  for (const t of ['uke', 'maned', 'arbeidsgivere', 'konto']) $(`v-${t}`).hidden = t !== tab;
+  for (const t of ['uke', 'oversikt', 'arbeidsgivere', 'konto']) $(`v-${t}`).hidden = t !== tab;
   if (location.hash !== `#${tab}`) history.replaceState(null, '', `#${tab}`);
   render();
 }
@@ -381,7 +381,7 @@ function saveEmp(ev) {
   toast(ui.emp ? 'Arbeidsgiver oppdatert' : 'Arbeidsgiver lagt til');
 }
 
-// ---------- Måned ----------
+// ---------- Oversikt: måned og år ----------
 
 function renderMonth() {
   const [y, m] = ui.month.split('-').map(Number);
@@ -405,7 +405,10 @@ function renderMonth() {
       }).join('')
       + `</tbody><tfoot><tr><td>Sum</td><td>${total.count}</td><td>${hrs(total.hours)}</td><td>${kr(total.supplementPay)}</td><td>${total.overtimePay ? kr(total.overtimePay) : '–'}</td><td>${kr(total.pay)}</td></tr></tfoot>`;
   }
-  $('sheetEmp').innerHTML = ids.map(id => `<option value="${id}">${esc(empById(id)?.name)}</option>`).join('');
+  const chosen = $('sheetEmp').value;
+  $('sheetEmp').innerHTML = ids.map(id => `<option value="${id}">${esc(empById(id)?.name)}</option>`).join('')
+    + (ids.length > 1 ? '<option value="all">Alle arbeidsgivere</option>' : '');
+  if ([...$('sheetEmp').options].some(o => o.value === chosen)) $('sheetEmp').value = chosen;
   $('sheetEmp').hidden = ids.length < 2;
   $('csvBtn').disabled = $('sheetBtn').disabled = $('icsBtn').disabled = !ids.length;
   renderPayslips(byEmp, ids);
@@ -441,20 +444,30 @@ function renderYear(y) {
 }
 
 function printTimesheet() {
-  const empId = $('sheetEmp').value || Object.keys(L.monthSummary(D().shifts, D().employers, ui.month).byEmp)[0];
-  const emp = empById(empId); if (!emp) return;
+  const choice = $('sheetEmp').value || Object.keys(L.monthSummary(D().shifts, D().employers, ui.month).byEmp)[0];
+  if (!choice) return;
   const all = L.calcAll(D().shifts, D().employers);
-  const list = L.shiftsInMonth(D().shifts, ui.month).filter(s => s.employerId === empId);
+  const month = L.shiftsInMonth(D().shifts, ui.month);
+  const ids = choice === 'all' ? [...new Set(month.map(s => s.employerId))] : [choice];
   const [y, m] = ui.month.split('-').map(Number);
-  let sum = 0;
-  const rows = list.map(s => { const c = all.get(s.id); sum += c.hours; const d = L.parseDate(s.date);
-    return `<tr><td>${DAY[d.getDay()]} ${d.getDate()}.${d.getMonth() + 1}.</td><td>${s.start}</td><td>${s.end}</td><td>${s.breakMin || 0} min</td><td>${num(c.hours, 2)}</td></tr>`; }).join('');
+  let grand = 0, count = 0;
+  const tables = ids.map(id => {
+    const emp = empById(id), list = month.filter(s => s.employerId === id);
+    let sum = 0;
+    const rows = list.map(s => { const c = all.get(s.id); sum += c.hours; const d = L.parseDate(s.date);
+      return `<tr><td>${DAY[d.getDay()]} ${d.getDate()}.${d.getMonth() + 1}.</td><td>${s.start}</td><td>${s.end}</td><td>${s.breakMin || 0} min</td><td>${num(c.hours, 2)}</td></tr>`; }).join('');
+    grand += sum; count += list.length;
+    return `${ids.length > 1 ? `<h2>${esc(emp?.name || '')}</h2>` : ''}
+      <table><thead><tr><th>Dato</th><th>Start</th><th>Slutt</th><th>Pause</th><th>Timer</th></tr></thead>
+      <tbody>${rows}</tbody><tfoot><tr><td colspan="4"><b>Sum (${list.length} vakter)</b></td><td><b>${num(sum, 2)}</b></td></tr></tfoot></table>`;
+  }).join('');
+  const single = ids.length === 1 ? empById(ids[0]) : null;
   $('printArea').innerHTML = `
     <h1>Timeliste</h1>
-    <p><b>Arbeidsgiver:</b> ${esc(emp.name)}<br><b>Periode:</b> ${MONTH[m - 1]} ${y}<br><b>Navn:</b> ______________________________</p>
-    <table><thead><tr><th>Dato</th><th>Start</th><th>Slutt</th><th>Pause</th><th>Timer</th></tr></thead>
-    <tbody>${rows}</tbody><tfoot><tr><td colspan="4"><b>Sum (${list.length} vakter)</b></td><td><b>${num(sum, 2)}</b></td></tr></tfoot></table>
-    <div class="sign"><div>Dato og signatur, arbeidstaker</div><div>Dato og signatur, arbeidsgiver</div></div>
+    <p><b>Arbeidsgiver:</b> ${single ? esc(single.name) : 'Alle arbeidsgivere'}<br><b>Periode:</b> ${MONTH[m - 1]} ${y}<br><b>Navn:</b> ______________________________</p>
+    ${tables}
+    ${ids.length > 1 ? `<p><b>Totalt: ${num(grand, 2)} timer (${count} vakter)</b></p>` : ''}
+    <div class="sign"><div>Dato og signatur, arbeidstaker</div>${single ? '<div>Dato og signatur, arbeidsgiver</div>' : ''}</div>
     <p style="font-size:8pt;color:#555">Laget med Vaktbok. Timer er etter ubetalt pause.</p>`;
   document.body.classList.add('printing');
   const done = () => { document.body.classList.remove('printing'); removeEventListener('afterprint', done); };
@@ -577,7 +590,7 @@ function render() {
   renderSync(); renderBanners();
   if (ui.landing) return;
   if (ui.tab === 'uke') renderWeek();
-  else if (ui.tab === 'maned') renderMonth();
+  else if (ui.tab === 'oversikt') renderMonth();
   else if (ui.tab === 'arbeidsgivere') renderEmployers();
   else renderAccount();
 }
@@ -791,7 +804,8 @@ async function registerSW() {
 }
 
 const initialHash = location.hash;
-const start = ['uke', 'maned', 'arbeidsgivere', 'konto'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'uke';
+const hashTab = location.hash.slice(1) === 'maned' ? 'oversikt' : location.hash.slice(1); // gamle lenker til #maned virker fortsatt
+const start = ['uke', 'oversikt', 'arbeidsgivere', 'konto'].includes(hashTab) ? hashTab : 'uke';
 setTab(start);
 if (initialHash === '#om') showLanding(true);
 store.init().then(() => {

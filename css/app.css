@@ -287,3 +287,4 @@ body.show-landing .tabs, body.show-landing main, body.show-landing #banners { di
   .print-area .sign { display: grid; grid-template-columns: 1fr 1fr; gap: 32pt; margin-top: 40pt; }
   .print-area .sign div { border-top: 1px solid #000; padding-top: 4pt; font-size: 9pt; }
 }
+@media print { .print-area h2 { font-size: 13pt; margin: 16pt 0 0; } }

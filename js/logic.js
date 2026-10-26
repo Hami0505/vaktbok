@@ -344,16 +344,31 @@ export function toCSV(shifts, employers, ym) {
   return '\uFEFF' + rows.map(r => r.map(csvCell).join(';')).join('\r\n');
 }
 
+// Timeliste for én arbeidsgiver, eller employerId = 'all' for alle, gruppert per arbeidsgiver.
 export function toTimesheet(shifts, employers, ym, employerId) {
-  const emp = employers.find(e => e.id === employerId);
-  const list = shiftsInMonth(shifts, ym).filter(s => s.employerId === employerId);
-  let total = 0;
-  const lines = list.map(s => {
-    const c = calcShift(s, emp); total += c.hours;
-    const d = parseDate(s.date);
-    return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}  ${s.start}–${s.end}  pause ${s.breakMin || 0} min  ${nok(c.hours)} t`;
+  const month = shiftsInMonth(shifts, ym);
+  const ids = employerId === 'all' ? [...new Set(month.map(s => s.employerId))] : [employerId];
+  let grand = 0, count = 0;
+  const blocks = ids.map(id => {
+    const emp = employers.find(e => e.id === id);
+    const list = month.filter(s => s.employerId === id);
+    let total = 0;
+    const lines = list.map(s => {
+      const c = calcShift(s, emp); total += c.hours;
+      const d = parseDate(s.date);
+      return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}  ${s.start}–${s.end}  pause ${s.breakMin || 0} min  ${nok(c.hours)} t`;
+    });
+    grand += total; count += list.length;
+    return { name: emp ? emp.name : '', lines, total, n: list.length };
   });
-  return [`Timeliste ${ym} – ${emp ? emp.name : ''}`, '', ...lines, '', `Sum: ${nok(total)} timer (${list.length} vakter)`].join('\n');
+  if (employerId !== 'all') {
+    const [x] = blocks;
+    return [`Timeliste ${ym} – ${x.name}`, '', ...x.lines, '', `Sum: ${nok(x.total)} timer (${x.n} vakter)`].join('\n');
+  }
+  const out = [`Timeliste ${ym} – alle arbeidsgivere`];
+  for (const x of blocks) out.push('', x.name, ...x.lines, `Sum ${x.name}: ${nok(x.total)} timer (${x.n} vakter)`);
+  out.push('', `Totalt: ${nok(grand)} timer (${count} vakter)`);
+  return out.join('\n');
 }
 
 // ---------- Kalender (.ics) ----------

@@ -21,7 +21,7 @@ Videreutviklingen er gjort på samme måte som innleveringen: jeg beskrev behov 
 - **Overtid** per dag og/eller per uke, per arbeidsgiver, slik arbeidsmiljøloven regner det.
 - **Feriepenger** (10,2 % eller 12 %) og valgfritt netto-estimat fra skatteprosenten.
 - **Varsler** ved for kort hviletid (11 timer, justerbart), overlappende vakter og når samlet arbeidstid i en uke passerer en grense.
-- **Måneds- og årsoversikt** per arbeidsgiver, med diagram over året. Regneark (CSV for Excel), kalenderfil (.ics), timeliste til utklippstavlen og timeliste som PDF med signaturfelt.
+- **Oversikt** over måned og år per arbeidsgiver, med diagram over året. Regneark (CSV for Excel), kalenderfil (.ics), timeliste til utklippstavlen og timeliste som PDF med signaturfelt.
 - **Sjekk mot lønnsslippen:** skriv inn utbetalt brutto og se om det stemmer med estimatet.
 - **Konto og synk i sanntid** mellom mobil og PC, med innlogging via engangskode på e-post. Uten konto fungerer alt lokalt i nettleseren.
 - **Fungerer offline** og kan installeres på hjemskjermen. Endringer gjort uten nett sendes når nettet er tilbake.
