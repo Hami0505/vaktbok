@@ -4,5 +4,5 @@
 export const config = {
   supabaseUrl: 'https://kvaxzvtlhbdpeicpcmbn.supabase.co',
   supabaseAnonKey: 'sb_publishable_-bZhQBX3CQNzXjHUBbl-DQ_LHPX6IQD',
-  contactEmail: '', // vises i personvernerklæringen og ved feil
+  contactEmail: 'vaktbok.app@gmail.com', // vises i personvernerklæringen og ved feil
 };
