@@ -441,7 +441,7 @@ function renderAccount() {
     const n = store.pending;
     p.innerHTML = `<h2>Konto</h2>
       <p>Logget inn som <b>${esc(store.user.email)}</b></p>
-      <p class="small muted">${n ? `${n} ${n === 1 ? 'endring' : 'endringer'} venter på å bli synket.` : 'Alle endringer er synket.'}${store.lastError ? ` Siste feil: ${esc(store.lastError)}` : ''}</p>
+      <p class="small muted">${n ? `${n} ${n === 1 ? 'endring' : 'endringer'} venter på å bli synket.` : 'Alle endringer er synket.'}${store.lastError ? ` Siste feil: ${esc(store.lastError)}${contact ? ` Vedvarer feilen, kontakt <a href="mailto:${esc(contact)}">${esc(contact)}</a>.` : ''}` : ''}</p>
       <div class="row"><button class="btn" data-action="sync-now">Synk nå</button><button class="btn" data-action="sign-out">Logg ut</button></div>`;
   }
   const s = D().settings;
@@ -683,6 +683,9 @@ store.addEventListener('guest-data', async ({ detail }) => {
 });
 
 // ---------- Oppstart ----------
+
+const contact = /^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']+$/.test(config.contactEmail || '') ? config.contactEmail : '';
+if (contact) Object.assign($('contactLink'), { href: `mailto:${contact}`, textContent: 'Kontakt', hidden: false });
 
 async function registerSW() {
   if (!('serviceWorker' in navigator) || !(location.protocol === 'https:' || location.hostname === 'localhost')) return;

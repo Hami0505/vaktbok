@@ -247,3 +247,5 @@ dialog .grid.three { grid-template-columns: repeat(3, 1fr); }
 .slip .res.ok { color: var(--ok); }
 .slip .res.off { color: var(--bad); }
 .slip input { text-align: right; }
+
+.foot-links { display: flex; gap: 16px; }
