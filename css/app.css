@@ -322,3 +322,10 @@ body.show-landing .tabs, body.show-landing main, body.show-landing #banners { di
 .imp-row label.check { margin: 0; flex: 1 1 auto; min-width: 0; }
 .imp-row select { width: auto; max-width: 45%; min-height: 36px; padding: 4px 8px; font-size: .875rem; }
 #impSummary p { margin: 10px 0 0; }
+
+.grow { flex: 1 1 180px; width: auto; }
+.imp-group .count { color: var(--muted); font-weight: 400; }
+.imp-details { margin-top: 12px; }
+.imp-details summary { cursor: pointer; font-weight: 700; padding: 6px 0; }
+.imp-row .emp { color: var(--muted); font-size: .85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%; }
+#impGroupsWrap h3 { font-size: 1rem; margin: 16px 0 2px; }

@@ -109,30 +109,34 @@ export function setupImporter(ctx) {
   const columns = () => Object.fromEntries(COLS.map(([k]) => [k, Number($('impColGrid').querySelector(`[data-col="${k}"]`).value)]));
 
   // ---------- Forhåndsvisning ----------
+  const WORK = /vakt|jobb|skift|turnus|natt|kveld|dagvakt|helg|arbeid|work|shift/i;
+  const gkey = t => (t || '').trim().toLowerCase() || '(uten navn)';
+
   function preparePreview(saved = null) {
     const emps = D().employers.filter(e => !e.archived);
-    if (!emps.length && st.kind === 'ics') {
-      dlg.close(); toast('Legg til arbeidsgiveren vaktene gjelder først. Deretter kan du importere.'); setTab('arbeidsgivere'); openEmp(); return;
-    }
-    const cols = st.kind === 'csv' ? columns() : null;
-    const opts = emps.map(e => `<option value="${e.id}">${esc(e.name)}</option>`);
-    if (st.kind === 'ics' && emps.length > 1) opts.push('<option value="auto">Finn ut fra navnet i hendelsen</option>');
-    if (st.kind === 'csv') opts.unshift('<option value="col">Fra kolonnen Arbeidsgiver</option>');
-    $('impEmp').innerHTML = opts.join('');
-    if (st.kind === 'csv') $('impEmp').value = cols.employer >= 0 || !emps.length ? 'col' : emps[0].id;
-    if (saved && [...$('impEmp').options].some(o => o.value === saved.employer)) $('impEmp').value = saved.employer;
     const ics = st.kind === 'ics';
-    for (const id of ['impFromL', 'impToL', 'impContainsL']) $(id).hidden = !ics;
+    if (!ics) {
+      const cols = columns();
+      const opts = emps.map(e => `<option value="${e.id}">${esc(e.name)}</option>`);
+      opts.unshift('<option value="col">Fra kolonnen Arbeidsgiver</option>');
+      $('impEmp').innerHTML = opts.join('');
+      $('impEmp').value = cols.employer >= 0 || !emps.length ? 'col' : emps[0].id;
+    }
+    $('impEmpL').hidden = ics;
+    $('impGroupsWrap').hidden = !ics;
+    for (const id of ['impFromL', 'impToL']) $(id).hidden = !ics;
     const today = new Date();
     $('impFrom').value = L.isoDate(saved ? new Date(today.getFullYear(), today.getMonth(), today.getDate() - 14) : new Date(today.getFullYear(), today.getMonth() - 1, 1));
     $('impTo').value = L.isoDate(new Date(today.getFullYear(), today.getMonth() + 3, 0));
-    $('impContains').value = saved?.contains || '';
     $('impBreak').value = saved?.breakMin ?? 0;
+    $('impGroupSearch').value = '';
     $('impSaveL').hidden = !st.link;
     $('impSave').checked = true;
+    $('impDetails').open = !ics;
     st.choice = new Map();
-    show(st.kind === 'csv' ? ['impCols', 'impPreview'] : ['impPreview']);
-    if (st.link) $('impNext').hidden = true;
+    st.groups = new Map();
+    st.savedGroups = saved?.groups || {};
+    show(ics ? ['impPreview'] : ['impCols', 'impPreview']);
     updatePreview();
   }
 
@@ -142,53 +146,101 @@ export function setupImporter(ctx) {
     return (emps.find(e => e.name.toLowerCase() === n) || emps.find(e => n.includes(e.name.toLowerCase())) || {}).id || null;
   };
 
-  function compute() {
-    const choice = $('impEmp').value, breakMin = Number($('impBreak').value) || 0;
-    if (st.kind === 'ics') {
-      const employerFor = choice === 'auto' ? nameMatch : () => choice;
-      return L.icsToShifts(st.events, { employerFor, from: $('impFrom').value, to: $('impTo').value, contains: $('impContains').value.trim(), existing: D().shifts, newId, breakMin });
+  // Kalender: samle hendelsene i perioden etter navn, og husk valgene per gruppe.
+  function refreshGroups() {
+    const all = L.icsToShifts(st.events, { employerFor: () => '_', from: $('impFrom').value, to: $('impTo').value, existing: [], newId });
+    const counts = new Map();
+    for (const s of all.shifts) { const k = gkey(s.title); const g = counts.get(k) || { title: s.title.trim() || '(uten navn)', count: 0 }; g.count++; counts.set(k, g); }
+    const emps = D().employers.filter(e => !e.archived);
+    for (const [k, g] of counts) {
+      const prev = st.groups.get(k), saved = st.savedGroups[k];
+      if (prev) { prev.count = g.count; continue; }
+      const match = nameMatch(g.title);
+      const savedEmp = saved && (saved.emp?.startsWith('new:') || D().employers.some(e => e.id === saved.emp)) ? saved.emp : null;
+      st.groups.set(k, {
+        title: g.title, count: g.count,
+        on: saved ? saved.on : !!(match || WORK.test(g.title)),
+        emp: savedEmp || match || (emps[0] ? emps[0].id : `new:${g.title}`),
+      });
     }
+    for (const k of [...st.groups.keys()]) if (!counts.has(k)) st.groups.get(k).count = 0;
+    st.base = all;
+  }
+
+  function compute() {
+    const breakMin = Number($('impBreak').value) || 0;
+    if (st.kind === 'ics') {
+      const employerFor = t => { const g = st.groups.get(gkey(t)); return g && g.on ? g.emp : null; };
+      const r = L.icsToShifts(st.events, { employerFor, from: $('impFrom').value, to: $('impTo').value, existing: D().shifts, newId, breakMin });
+      r.skipped.deselected = r.skipped.noEmployer; r.skipped.noEmployer = 0;
+      return r;
+    }
+    const choice = $('impEmp').value;
     const cols = columns();
     const rows = $('impHeader').checked ? st.rows.slice(1) : st.rows;
-    // Ukjente navn fra kolonnen blir nye arbeidsgivere (opprettes ved import).
     const employerFor = choice === 'col' ? name => nameMatch(name) || `new:${name.trim()}` : () => choice;
     return L.csvToShifts(rows, cols, { employerFor, defaultEmployerId: choice === 'col' ? null : choice, existing: D().shifts, newId, breakMin });
   }
 
   const keyOf = s => `${s.date}|${s.start}|${s.end}|${s.title}`;
+  const empName = id => String(id).startsWith('new:') ? `Ny: ${id.slice(4)}` : (D().employers.find(e => e.id === id) || {}).name || '';
+  const empOptions = (sel, title) => {
+    const emps = D().employers.filter(e => !e.archived || e.id === sel);
+    const newVal = `new:${title}`;
+    return emps.map(e => `<option value="${e.id}"${e.id === sel ? ' selected' : ''}>${esc(e.name)}</option>`).join('')
+      + `<option value="${esc(newVal)}"${sel === newVal ? ' selected' : ''}>Ny arbeidsgiver: ${esc(title)}</option>`
+      + (String(sel).startsWith('new:') && sel !== newVal ? `<option value="${esc(sel)}" selected>Ny arbeidsgiver: ${esc(sel.slice(4))}</option>` : '');
+  };
+
+  function renderGroups() {
+    const q = $('impGroupSearch').value.trim().toLowerCase();
+    const groups = [...st.groups.entries()].filter(([, g]) => g.count > 0).sort((a, b) => (b[1].on - a[1].on) || b[1].count - a[1].count);
+    const visible = groups.filter(([, g]) => !q || g.title.toLowerCase().includes(q));
+    $('impGroupTools').hidden = groups.length < 2;
+    $('impGroups').innerHTML = visible.map(([k, g]) => `
+      <div class="imp-row imp-group${g.on ? '' : ' off'}">
+        <label class="check"><input type="checkbox" data-group="${esc(k)}"${g.on ? ' checked' : ''}>
+          <span><b>${esc(g.title)}</b> <span class="count">(${g.count})</span></span></label>
+        <select data-group-emp="${esc(k)}" aria-label="Arbeidsgiver for ${esc(g.title)}"${g.on ? '' : ' disabled'}>${empOptions(g.emp, g.title)}</select>
+      </div>`).join('') || `<p class="small muted" style="padding:10px">${groups.length ? 'Ingen navn passer søket.' : 'Ingen hendelser med klokkeslett i perioden.'}</p>`;
+  }
 
   function updatePreview() {
     if (st.kind === 'ics' && $('impFrom').value && $('impTo').value && $('impTo').value < $('impFrom').value) {
       st.result = { shifts: [], skipped: {} };
       $('impSummary').innerHTML = '<span class="flag block overlap">«Til og med» må være samme dag som «Fra og med» eller senere.</span>';
-      $('impList').innerHTML = ''; setGo(); return;
+      $('impList').innerHTML = ''; $('impGroups').innerHTML = ''; setGo(); return;
     }
+    if (st.kind === 'ics') { refreshGroups(); renderGroups(); }
     st.result = compute();
     const { shifts, skipped } = st.result;
     for (const s of shifts) {
       const c = st.choice.get(keyOf(s));
-      if (c) { s.checked = c.checked; if (c.employerId) s.employerId = c.employerId; } else s.checked = true;
+      s.checked = c ? c.checked : true;
+      if (c && c.employerId && st.kind === 'csv') s.employerId = c.employerId;
     }
     const why = [
-      [skipped.outside, 'utenfor perioden'], [skipped.filtered, 'uten teksten du søkte på'], [skipped.allDay, 'heldagshendelser'],
+      [skipped.deselected, 'hører til hendelser du ikke har krysset av'],
+      [skipped.outside, 'utenfor perioden'], [skipped.allDay, 'heldagshendelser'],
       [skipped.duplicate, 'finnes allerede i Vaktbok'], [skipped.noEmployer, 'uten kjent arbeidsgiver'],
       [skipped.unsupported, 'gjentas månedlig eller årlig (legg dem inn med «Gjenta»)'], [skipped.cancelled, 'avlyste'],
       [skipped.invalid, st.kind === 'csv' ? 'rader uten gyldig dato, start eller slutt' : 'uten gyldig start og slutt, eller lengre enn et døgn'],
     ].filter(([n]) => n).map(([n, t]) => `${n} ${t}`);
     const newNames = [...new Set(shifts.filter(s => s.checked && String(s.employerId).startsWith('new:')).map(s => s.employerId.slice(4)))];
-    $('impSummary').innerHTML = (shifts.length ? '' : '<p><b>Ingen nye vakter å importere.</b></p>')
-      + (why.length ? `<p class="small muted">Hoppes over: ${esc(why.join(', '))}.</p>` : '')
-      + (newNames.length ? `<p class="small">Nye arbeidsgivere opprettes: <b>${esc(newNames.join(', '))}</b>. Timelønn settes til 0 kr, så legg den inn under Arbeidsgivere etterpå.</p>` : '');
-    const emps = D().employers;
-    const empOpts = (sel) => emps.map(e => `<option value="${e.id}"${e.id === sel ? ' selected' : ''}>${esc(e.name)}</option>`).join('')
-      + (String(sel).startsWith('new:') ? `<option value="${esc(sel)}" selected>Ny: ${esc(sel.slice(4))}</option>` : '');
+    $('impSummary').innerHTML = (shifts.length ? '' : `<p><b>Ingen vakter valgt.</b>${st.kind === 'ics' ? ' Kryss av for hendelsene som er vakter.' : ''}</p>`)
+      + (newNames.length ? `<p class="small">Nye arbeidsgivere opprettes: <b>${esc(newNames.join(', '))}</b>. Timelønn settes til 0 kr, så legg den inn under Arbeidsgivere etterpå.</p>` : '')
+      + (why.length ? `<p class="small muted">Hoppes over: ${esc(why.join(', '))}.</p>` : '');
     const shown = shifts.slice(0, 400);
     $('impList').innerHTML = shown.map((s, i) => `
       <div class="imp-row${s.checked ? '' : ' off'}">
         <label class="check"><input type="checkbox" data-row="${i}"${s.checked ? ' checked' : ''}>
           <span><b>${fmtDay(s.date)} ${s.start}–${s.end}</b>${s.title ? `<span class="small muted"> ${esc(s.title)}</span>` : ''}</span></label>
-        <select data-row-emp="${i}" aria-label="Arbeidsgiver for ${fmtDay(s.date)} ${s.start}">${empOpts(s.employerId)}</select>
+        ${st.kind === 'csv'
+          ? `<select data-row-emp="${i}" aria-label="Arbeidsgiver for ${fmtDay(s.date)} ${s.start}">${empOptions(s.employerId, s.title || 'Arbeidsgiver')}</select>`
+          : `<span class="emp">${esc(empName(s.employerId))}</span>`}
       </div>`).join('') + (shifts.length > 400 ? `<p class="small muted">Viser de første 400 av ${shifts.length}. Snevre inn perioden for å se resten.</p>` : '');
+    $('impDetailsSum').textContent = `Se og velg enkeltvakter (${shifts.length})`;
+    $('impDetails').hidden = !shifts.length;
     $('impAllNone').hidden = shifts.length < 2;
     setGo();
   }
@@ -213,21 +265,25 @@ export function setupImporter(ctx) {
     for (const s of chosen) {
       if (String(s.employerId).startsWith('new:') && !created.has(s.employerId)) {
         const name = s.employerId.slice(4).slice(0, 60) || 'Arbeidsgiver';
-        created.set(s.employerId, { id: newId(), name, color: COLORS[(D().employers.length + created.size) % COLORS.length], rate: 0, rules: [], overtime: null, archived: false });
+        const same = D().employers.find(e => e.name.toLowerCase() === name.toLowerCase());
+        created.set(s.employerId, same || { id: newId(), name, color: COLORS[(D().employers.length + created.size) % COLORS.length], rate: 0, rules: [], overtime: null, archived: false, isNew: true });
       }
     }
+    const newEmps = [...created.values()].filter(e => e.isNew).map(({ isNew, ...e }) => e);
     const shifts = chosen.map(({ checked, title, ...s }) => ({ ...s, employerId: created.get(s.employerId)?.id || s.employerId }));
-    store.addAll({ employers: [...created.values()], shifts });
+    store.addAll({ employers: newEmps, shifts });
     if (st.link && $('impSave').checked) {
+      const groups = {};
+      for (const [k, g] of st.groups) groups[k] = { on: g.on, emp: created.get(g.emp)?.id || g.emp };
       const links = [...(D().settings.calendarLinks || [])];
-      const entry = { url: st.link.url, name: st.link.name || 'Kalender', employer: $('impEmp').value, contains: $('impContains').value.trim(), breakMin: Number($('impBreak').value) || 0, lastSync: new Date().toISOString() };
+      const entry = { url: st.link.url, name: st.link.name || 'Kalender', breakMin: Number($('impBreak').value) || 0, groups, lastSync: new Date().toISOString() };
       const i = links.findIndex(l => l.url === entry.url);
       if (i >= 0) links[i] = entry; else links.push(entry);
       store.updateSettings({ calendarLinks: links });
     }
     dlg.close();
     goToWeek(shifts[0].date);
-    toast(`Importerte ${shifts.length} ${shifts.length === 1 ? 'vakt' : 'vakter'}` + (created.size ? `, og opprettet ${created.size} ${created.size === 1 ? 'arbeidsgiver' : 'arbeidsgivere'} med timelønn 0 kr` : ''));
+    toast(`Importerte ${shifts.length} ${shifts.length === 1 ? 'vakt' : 'vakter'}` + (newEmps.length ? `, og opprettet ${newEmps.length} ${newEmps.length === 1 ? 'arbeidsgiver' : 'arbeidsgivere'} med timelønn 0 kr` : ''));
   }
 
   // ---------- Sikkerhetskopi (.json) og prototype ----------
@@ -292,16 +348,26 @@ export function setupImporter(ctx) {
   $('impBack').addEventListener('click', () => { renderSavedLinks(); show(['impSource']); });
   $('impCols').addEventListener('change', () => { st.choice = new Map(); updatePreview(); });
   $('impPreview').addEventListener('input', ev => {
-    if (ev.target.dataset.row !== undefined) { setRow(Number(ev.target.dataset.row), { checked: ev.target.checked }); ev.target.closest('.imp-row').classList.toggle('off', !ev.target.checked); setGo(); return; }
-    if (ev.target.dataset.rowEmp !== undefined) { setRow(Number(ev.target.dataset.rowEmp), { employerId: ev.target.value }); updatePreview(); return; }
-    if (ev.target.id === 'impSave') return;
-    if (ev.target.id === 'impEmp') st.choice = new Map();
+    const t = ev.target;
+    if (t.dataset.row !== undefined) { setRow(Number(t.dataset.row), { checked: t.checked }); t.closest('.imp-row').classList.toggle('off', !t.checked); setGo(); return; }
+    if (t.dataset.rowEmp !== undefined) { setRow(Number(t.dataset.rowEmp), { employerId: t.value }); updatePreview(); return; }
+    if (t.dataset.group !== undefined) { st.groups.get(t.dataset.group).on = t.checked; st.choice = new Map(); updatePreview(); return; }
+    if (t.dataset.groupEmp !== undefined) { st.groups.get(t.dataset.groupEmp).emp = t.value; updatePreview(); return; }
+    if (t.id === 'impGroupSearch') { renderGroups(); return; }
+    if (t.id === 'impSave') return;
+    if (t.id === 'impEmp') st.choice = new Map();
     updatePreview();
   });
   $('impAllNone').addEventListener('click', ev => {
     const all = ev.target.dataset.all; if (all === undefined) return;
     (st.result?.shifts || []).forEach((s, i) => setRow(i, { checked: all === '1' }));
     updatePreview();
+  });
+  $('impGroupTools').addEventListener('click', ev => {
+    const all = ev.target.dataset.gall; if (all === undefined) return;
+    const q = $('impGroupSearch').value.trim().toLowerCase();
+    for (const g of st.groups.values()) if (!q || g.title.toLowerCase().includes(q)) g.on = all === '1';
+    st.choice = new Map(); updatePreview();
   });
   $('impForm').addEventListener('submit', ev => { ev.preventDefault(); doImport(); });
 

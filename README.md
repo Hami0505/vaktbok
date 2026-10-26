@@ -22,7 +22,7 @@ Videreutviklingen er gjort på samme måte som innleveringen: jeg beskrev behov 
 - **Feriepenger** (10,2 % eller 12 %), og valg mellom brutto og netto i oversiktene (netto regnes fra skatteprosenten din).
 - **Varsler** ved for kort hviletid (11 timer, justerbart), overlappende vakter og når samlet arbeidstid i en uke passerer en grense.
 - **Oversikt** over måned og år per arbeidsgiver, med diagram over året. Hold over eller trykk på en måned for å se tallene og åpne den. Regneark (CSV for Excel), kalenderfil (.ics), timeliste til utklippstavlen og timeliste som PDF med signaturfelt.
-- **Importer vakter** fra kalenderlenke (iPhone og iCloud, Google, Outlook, byråets vaktplan), kalenderfil (.ics), regneark (.csv) eller sikkerhetskopi. Gjentakende hendelser blir enkeltvakter, du ser og velger vaktene før import, setter standardpause, og dubletter hoppes over. Lagrede kalenderlenker kan hentes på nytt med ett trykk.
+- **Importer vakter** fra kalenderlenke (iPhone og iCloud, Google, Outlook, byråets vaktplan), kalenderfil (.ics), regneark (.csv) eller sikkerhetskopi. Hendelsene samles etter navn, så du krysser av for hva som er vakter og kobler hver gruppe til en arbeidsgiver (eller oppretter en ny). Gjentakende hendelser blir enkeltvakter, du kan velge bort enkeltvakter, setter standardpause, og dubletter hoppes over. Lagrede kalenderlenker husker valgene og kan hentes på nytt med ett trykk.
 - **Sjekk mot lønnsslippen:** skriv inn utbetalt brutto og se om det stemmer med estimatet.
 - **Konto og synk i sanntid** mellom mobil og PC, med innlogging via engangskode på e-post. Uten konto fungerer alt lokalt i nettleseren.
 - **Fungerer offline** og kan installeres på hjemskjermen. Endringer gjort uten nett sendes når nettet er tilbake.

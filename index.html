@@ -309,15 +309,29 @@
 
     <div id="impPreview" hidden>
       <div class="grid three">
-        <label>Vaktene gjelder<select id="impEmp"></select></label>
+        <label id="impEmpL">Vaktene gjelder<select id="impEmp"></select></label>
         <label>Standardpause (min)<input type="number" id="impBreak" min="0" max="180" step="5" value="0" inputmode="numeric"></label>
-        <label id="impContainsL">Bare hendelser som inneholder<input type="text" id="impContains" maxlength="40" placeholder="F.eks. vakt"></label>
         <label id="impFromL">Fra og med<input type="date" id="impFrom"></label>
         <label id="impToL">Til og med<input type="date" id="impTo"></label>
       </div>
+
+      <div id="impGroupsWrap" hidden>
+        <h3>Hvilke hendelser er vakter?</h3>
+        <p class="help">Hendelsene er samlet etter navn. Kryss av for det som er vakter, og velg arbeidsgiver. «Ny arbeidsgiver» oppretter den når du importerer.</p>
+        <div class="row" id="impGroupTools">
+          <input type="search" id="impGroupSearch" placeholder="Søk etter navn" aria-label="Søk i hendelser" class="grow">
+          <button type="button" class="btn link" data-gall="1">Alle</button>
+          <button type="button" class="btn link" data-gall="0">Ingen</button>
+        </div>
+        <div class="imp-list" id="impGroups"></div>
+      </div>
+
       <div id="impSummary" aria-live="polite"></div>
-      <div class="row" id="impAllNone"><button type="button" class="btn link" data-all="1">Velg alle</button><button type="button" class="btn link" data-all="0">Velg ingen</button></div>
-      <div class="imp-list" id="impList"></div>
+      <details id="impDetails" class="imp-details">
+        <summary id="impDetailsSum">Se og velg enkeltvakter</summary>
+        <div class="row" id="impAllNone"><button type="button" class="btn link" data-all="1">Velg alle</button><button type="button" class="btn link" data-all="0">Velg ingen</button></div>
+        <div class="imp-list" id="impList"></div>
+      </details>
       <label class="check" id="impSaveL"><input type="checkbox" id="impSave" checked> Lagre lenken, så du kan hente nye vakter senere</label>
     </div>
 
