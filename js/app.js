@@ -208,7 +208,7 @@ function shiftItem(s, warn, actions) {
   const emp = empById(s.employerId), c = ui.calc?.get(s.id) || L.calcShift(s, emp);
   return `<div class="item">
     <button class="open" data-action="edit-shift" data-id="${s.id}" aria-label="Endre vakt ${esc(emp?.name)} ${fmtDay(s.date)}">
-      <span class="who"><span class="dot" style="background:${safeColor(emp?.color)}"></span>${esc(emp ? emp.name : 'Ukjent')}</span>
+      <span class="who"><span class="dot" style="background:${safeColor(emp?.color)}"></span>${esc(emp ? emp.name : 'Ukjent')}${s.seriesId ? '<span class="series-mark" title="Gjentakende vakt" aria-label="gjentakende"> ↻</span>' : ''}</span>
       <span class="num">${hrs(c.hours)}</span>
       <span class="meta">${fmtDay(s.date)} ${s.start}–${s.end}${s.breakMin ? `, pause ${s.breakMin} min` : ''}${s.note ? `, ${esc(s.note)}` : ''}</span>
       <span class="meta num">${kr(shown(c.pay))}${c.overtimeH > 0 ? `, ${hrs(c.overtimeH)} overtid` : ''}</span>
@@ -223,8 +223,127 @@ function shiftItem(s, warn, actions) {
 function readShiftForm() {
   return {
     id: ui.shift?.id, employerId: $('fEmp').value, date: $('fDate').value, start: $('fStart').value, end: $('fEnd').value,
-    breakMin: Number($('fBreak').value || 0), note: $('fNote').value.trim(),
+    breakMin: Number($('fBreak').value || 0), note: $('fNote').value.trim(), seriesId: ui.shift?.seriesId || null,
   };
+}
+
+// ---------- Gjentakende vakter (serier) ----------
+
+const REP_DAYS = [[1, 'M', 'mandag'], [2, 'T', 'tirsdag'], [3, 'O', 'onsdag'], [4, 'T', 'torsdag'], [5, 'F', 'fredag'], [6, 'L', 'lørdag'], [0, 'S', 'søndag']];
+const seriesOf = id => (D().settings.series || {})[id] || null;
+
+// Samme serie og dato gir alltid samme id, så to enheter som fyller på samtidig ikke lager dubletter.
+function seriesShiftId(seriesId, date) {
+  let h1 = 1779033703, h2 = 3144134277, h3 = 1013904242, h4 = 2773480762;
+  for (const ch of `${seriesId}|${date}`) {
+    const k = ch.charCodeAt(0);
+    h1 = h2 ^ Math.imul(h1 ^ k, 597399067); h2 = h3 ^ Math.imul(h2 ^ k, 2869860233);
+    h3 = h4 ^ Math.imul(h3 ^ k, 951274213); h4 = h1 ^ Math.imul(h4 ^ k, 2716044179);
+  }
+  const hex = [h1, h2, h3, h4].map(x => (x >>> 0).toString(16).padStart(8, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-${'89ab'[parseInt(hex[16], 16) % 4]}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
+
+function fillRepeatOptions() {
+  const d = $('fDate').value ? L.parseDate($('fDate').value) : new Date();
+  const wd = DAY_LONG[d.getDay()], cur = $('fRepeat').value || 'none';
+  $('fRepeat').innerHTML = [['none', 'Ikke gjenta'], ['daily', 'Hver dag'], ['weekly', `Hver uke på ${wd}`], ['biweekly', `Annenhver uke på ${wd}`],
+    ['weekdays', 'Hver ukedag (mandag–fredag)'], ['custom', 'Egendefinert …']].map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+  $('fRepeat').value = cur;
+}
+
+function renderRepDays(days) {
+  $('fRepDays').innerHTML = REP_DAYS.map(([d, l, full]) =>
+    `<label class="chip"><input type="checkbox" data-rep-day="${d}" aria-label="${full}"${days.includes(d) ? ' checked' : ''}><span>${l}</span></label>`).join('');
+}
+
+function readRepeat() {
+  const v = $('fRepeat').value;
+  if (!v || v === 'none' || !$('fDate').value) return null;
+  const wd = L.parseDate($('fDate').value).getDay();
+  const rule = {
+    daily: { freq: 'day', interval: 1 }, weekly: { freq: 'week', interval: 1, days: [wd] },
+    biweekly: { freq: 'week', interval: 2, days: [wd] }, weekdays: { freq: 'week', interval: 1, days: [1, 2, 3, 4, 5] },
+  }[v] || { freq: $('fRepUnit').value, interval: Number($('fRepN').value),
+    days: [...$('fRepDays').querySelectorAll('input:checked')].map(i => Number(i.dataset.repDay)) };
+  rule.end = { type: document.querySelector('input[name="repEnd"]:checked').value, until: $('fRepUntil').value, count: Number($('fRepCount').value) };
+  return rule;
+}
+
+const horizonIso = () => L.isoDate(addDays(new Date(), L.SERIES_HORIZON_DAYS));
+
+function updateRepeatUI() {
+  const v = $('fRepeat').value;
+  $('repeatCustom').hidden = v !== 'custom';
+  $('fRepDays').hidden = $('fRepUnit').value !== 'week';
+  $('repeatEnd').hidden = !v || v === 'none';
+  const rule = readRepeat(), date = $('fDate').value;
+  if (!rule) { $('repeatDesc').textContent = ''; return; }
+  const errs = L.validateRepeat(rule, date);
+  if (errs.length) { $('repeatDesc').textContent = errs[0]; return; }
+  const dates = L.seriesDates(rule, date, date, horizonIso(), 1000);
+  const more = rule.end.type === 'never' || (rule.end.type === 'until' && rule.end.until > horizonIso());
+  $('repeatDesc').textContent = dates.length
+    ? `${L.describeRepeat(rule)}. Lager ${dates.length} ${dates.length === 1 ? 'vakt' : 'vakter'}${more ? ' det neste året, og fyller på automatisk' : ''}, første ${fmtDay(dates[0])}`
+    : 'Ingen datoer passer regelen. Sjekk ukedagene.';
+}
+
+function choiceBox(title, text, options) {
+  return new Promise(resolve => {
+    const d = $('choiceDialog');
+    $('choiceTitle').textContent = title; $('choiceText').textContent = text;
+    $('choiceList').innerHTML = options.map(([v, label, danger]) => `<button class="btn${danger ? ' danger' : ''}" value="${v}">${esc(label)}</button>`).join('');
+    d.returnValue = '';
+    d.addEventListener('close', () => resolve(d.returnValue && d.returnValue !== 'cancel' ? d.returnValue : null), { once: true });
+    d.showModal();
+  });
+}
+
+function createSeries(s, rule) {
+  const seriesId = newId();
+  const dates = L.seriesDates(rule, s.date, s.date, horizonIso(), 1000);
+  const template = { employerId: s.employerId, start: s.start, end: s.end, breakMin: s.breakMin, note: s.note };
+  const through = [horizonIso(), rule.end.type === 'until' ? rule.end.until : null].filter(Boolean).sort()[0];
+  store.addAll({ shifts: dates.map(date => ({ ...template, id: seriesShiftId(seriesId, date), date, seriesId })) });
+  store.updateSettings({ series: { ...(D().settings.series || {}), [seriesId]: { rule, start: s.date, template, through } } });
+  return dates.length;
+}
+
+// Fyller på serier som går lenger enn det som er laget, slik at det alltid ligger vakter ett år frem.
+function extendSeries() {
+  const all = D().settings.series || {};
+  const horizon = horizonIso();
+  const next = { ...all }, add = [];
+  let changed = false;
+  for (const [id, sr] of Object.entries(all)) {
+    const stop = [horizon, sr.rule.end?.type === 'until' ? sr.rule.end.until : null].filter(Boolean).sort()[0];
+    if (!sr.through || sr.through >= stop) continue;
+    if (!empById(sr.template.employerId)) continue;
+    const from = L.isoDate(addDays(L.parseDate(sr.through), 1));
+    for (const date of L.seriesDates(sr.rule, sr.start, from, stop, 1000)) {
+      const sid = seriesShiftId(id, date);
+      if (!D().shifts.some(x => x.id === sid)) add.push({ ...sr.template, id: sid, date, seriesId: id });
+    }
+    next[id] = { ...sr, through: stop }; changed = true;
+  }
+  if (add.length) store.addAll({ shifts: add });
+  if (changed) store.updateSettings({ series: next });
+}
+
+function applySeriesEdit(orig, edited, scope) {
+  if (scope === 'one') { store.upsertShift({ ...edited, seriesId: null }); return 'Vakta er endret og tatt ut av serien'; }
+  const delta = Math.round((L.parseDate(edited.date) - L.parseDate(orig.date)) / 86400000);
+  const patch = { employerId: edited.employerId, start: edited.start, end: edited.end, breakMin: edited.breakMin, note: edited.note };
+  const targets = D().shifts.filter(x => x.seriesId === orig.seriesId && (scope === 'all' || x.date >= orig.date));
+  store.addAll({ shifts: targets.map(x => ({ ...x, ...patch, date: delta ? L.isoDate(addDays(L.parseDate(x.date), delta)) : x.date })) });
+  const sr = seriesOf(orig.seriesId);
+  if (sr) {
+    const shiftDays = d => (((d + delta) % 7) + 7) % 7;
+    const rule = delta && sr.rule.freq === 'week' ? { ...sr.rule, days: (sr.rule.days || []).map(shiftDays) } : sr.rule;
+    const moved = d => delta ? L.isoDate(addDays(L.parseDate(d), delta)) : d;
+    store.updateSettings({ series: { ...D().settings.series, [orig.seriesId]: { ...sr, rule, template: patch, start: scope === 'all' ? moved(sr.start) : sr.start, through: moved(sr.through) } } });
+  }
+  return `Endret ${targets.length} ${targets.length === 1 ? 'vakt' : 'vakter'} i serien`;
 }
 
 function openShift(s = null) {
@@ -244,10 +363,17 @@ function openShift(s = null) {
       start: last?.start || '08:00', end: last?.end || '16:00', brk: last?.breakMin ?? 0, note: '',
     });
   }
-  $('repeatFields').hidden = !!s; // gjentakelse bare for nye vakter
-  $('fRepeat').value = '0';
-  $('repeatUntilLabel').hidden = true;
-  $('fRepeatUntil').value = L.isoDate(addDays(L.parseDate($('fDate').value), 28));
+  $('repeatFields').hidden = !!s; // gjentakelse velges når vakta lages
+  if (!s) {
+    $('fRepeat').innerHTML = ''; fillRepeatOptions(); $('fRepeat').value = 'none';
+    $('fRepN').value = 1; $('fRepUnit').value = 'week'; renderRepDays([L.parseDate($('fDate').value).getDay()]); ui.repDaysTouched = false;
+    document.querySelector('input[name="repEnd"][value="never"]').checked = true;
+    $('fRepUntil').value = L.isoDate(addDays(L.parseDate($('fDate').value), 90)); $('fRepCount').value = 10;
+    updateRepeatUI();
+  }
+  const sr = s?.seriesId && seriesOf(s.seriesId);
+  $('seriesInfo').hidden = !sr;
+  if (sr) $('seriesInfo').textContent = `↻ Gjentakende vakt: ${L.describeRepeat(sr.rule)}. Når du lagrer eller sletter, velger du om det gjelder bare denne eller flere.`;
   $('shiftErrors').innerHTML = '';
   updatePreview();
   $('shiftDialog').showModal();
@@ -279,30 +405,36 @@ function updatePreview() {
   $('preview').innerHTML = lines.join('<br>');
 }
 
-function saveShift(e) {
+async function saveShift(e) {
   e.preventDefault();
   const s = readShiftForm();
   const errs = L.validateShift(s, D().employers);
   if (L.noteLooksSensitive(s.note)) errs.push('Notatet inneholder et fødselsnummer eller D-nummer. Slike opplysninger skal ikke lagres i Vaktbok.');
-  const step = s.id ? 0 : Number($('fRepeat').value);
-  let dates = [s.date];
-  if (step) {
-    const until = $('fRepeatUntil').value;
-    if (!until || until < s.date) errs.push('«Til og med» må være samme dag som vakta eller senere.');
-    else if (L.parseDate(until) - L.parseDate(s.date) > 366 * 86400000) errs.push('Gjentakelse kan gå maks ett år frem.');
-    else dates = L.repeatDates(s.date, until, step, 60);
-  }
+  const rule = s.id ? null : readRepeat();
+  if (rule) errs.push(...L.validateRepeat(rule, s.date));
   if (errs.length) { $('shiftErrors').innerHTML = errs.map(x => `<li>${esc(x)}</li>`).join(''); return; }
-  if (dates.length > 1) {
-    store.addAll({ shifts: dates.map(date => ({ ...s, id: newId(), date })) });
-    toast(`Lagret ${dates.length} vakter`);
+
+  let msg;
+  if (rule) {
+    const n = createSeries(s, rule);
+    if (!n) { $('shiftErrors').innerHTML = '<li>Ingen datoer passer regelen. Sjekk ukedagene og sluttdatoen.</li>'; return; }
+    msg = `Lagret ${n} ${n === 1 ? 'vakt' : 'vakter'}. ${L.describeRepeat(rule)}`;
+  } else if (s.id && s.seriesId && seriesOf(s.seriesId)) {
+    const o = ui.shift;
+    const changed = ['employerId', 'date', 'start', 'end', 'breakMin', 'note'].some(k => String(o[k] ?? '') !== String(s[k] ?? ''));
+    if (!changed) { $('shiftDialog').close(); return; }
+    const scope = await choiceBox('Endre gjentakende vakt', 'Hvilke vakter skal endringen gjelde?',
+      [['one', 'Bare denne vakta'], ['future', 'Denne og alle senere'], ['all', 'Alle vaktene i serien']]);
+    if (!scope) return;
+    msg = applySeriesEdit(o, s, scope);
   } else {
     store.upsertShift(s);
-    toast(s.id ? 'Vakt oppdatert' : 'Vakt lagret');
+    msg = s.id ? 'Vakt oppdatert' : 'Vakt lagret';
   }
   $('shiftDialog').close();
   ui.weekStart = L.mondayOf(L.parseDate(s.date));
   renderWeek();
+  toast(msg);
 }
 
 // ---------- Arbeidsgivere ----------
@@ -551,6 +683,7 @@ function renderAccount() {
     const n = store.pending;
     p.innerHTML = `<h2>Konto</h2>
       <p>Logget inn som <b>${esc(store.user.email)}</b></p>
+      ${store.noSeriesColumn ? '<p class="flag block rest">Databasen mangler støtte for gjentakende vakter. Vaktene lagres, men koblingen til serien synkes ikke. Kjør oppdatert SQL fra README i Supabase.</p>' : ''}
       <p class="small muted">${n ? `${n} ${n === 1 ? 'endring' : 'endringer'} venter på å bli synket.` : 'Alle endringer er synket.'}${store.lastError ? ` ${esc(friendlyError(store.lastError))}${contact ? ` Vedvarer feilen, kontakt <a href="mailto:${esc(contact)}">${esc(contact)}</a>.` : ''}` : ''}</p>
       <div class="row"><button class="btn" data-action="sync-now">Synk nå</button><button class="btn" data-action="sign-out">Logg ut</button></div>`;
   }
@@ -670,7 +803,16 @@ $('homeLink').addEventListener('click', ev => {
   setTab('uke');
   window.scrollTo(0, 0);
 });
-$('fRepeat').addEventListener('change', () => { $('repeatUntilLabel').hidden = $('fRepeat').value === '0'; });
+$('repeatFields').addEventListener('input', updateRepeatUI);
+$('repeatFields').addEventListener('change', updateRepeatUI);
+$('fDate').addEventListener('change', () => {
+  if (ui.shift || !$('fDate').value) return;
+  fillRepeatOptions();
+  // Ukedagene i «Egendefinert» følger datoen til brukeren har valgt dager selv.
+  if (!ui.repDaysTouched) renderRepDays([L.parseDate($('fDate').value).getDay()]);
+  updateRepeatUI();
+});
+$('fRepDays').addEventListener('change', () => { ui.repDaysTouched = true; });
 $('pdfBtn').addEventListener('click', printTimesheet);
 $('prevWeek').addEventListener('click', () => { ui.weekStart = addDays(ui.weekStart, -7); renderWeek(); });
 $('nextWeek').addEventListener('click', () => { ui.weekStart = addDays(ui.weekStart, 7); renderWeek(); });
@@ -689,10 +831,31 @@ $('fEmp').addEventListener('change', () => {
   updatePreview();
 });
 $('deleteShiftBtn').addEventListener('click', async () => {
-  if (!ui.shift) return;
+  const o = ui.shift; if (!o) return;
+  const sr = o.seriesId && seriesOf(o.seriesId);
+  if (sr) {
+    const scope = await choiceBox('Slette gjentakende vakt', `${empById(o.employerId)?.name || ''}, ${fmtDay(o.date)} ${o.start}–${o.end}. ${L.describeRepeat(sr.rule)}.`,
+      [['one', 'Bare denne vakta', true], ['future', 'Denne og alle senere', true], ['all', 'Alle vaktene i serien', true]]);
+    if (!scope) return;
+    $('shiftDialog').close();
+    const gone = D().shifts.filter(x => x.id === o.id || (x.seriesId === o.seriesId && (scope === 'all' || (scope === 'future' && x.date >= o.date))));
+    const before = structuredClone(D().settings.series || {});
+    for (const x of gone) store.deleteShift(x.id);
+    if (scope !== 'one') {
+      const next = { ...D().settings.series };
+      const until = L.isoDate(addDays(L.parseDate(o.date), -1));
+      if (scope === 'all' || until < sr.start) delete next[o.seriesId];
+      else next[o.seriesId] = { ...sr, rule: { ...sr.rule, end: { type: 'until', until } }, through: [sr.through, until].sort()[0] };
+      store.updateSettings({ series: next });
+    }
+    toast(`Slettet ${gone.length} ${gone.length === 1 ? 'vakt' : 'vakter'}`, () => {
+      store.addAll({ shifts: gone }); store.updateSettings({ series: before }); toast('Vaktene er tilbake');
+    });
+    return;
+  }
   $('shiftDialog').close();
-  if (await confirmBox('Slette vakta?', `${empById(ui.shift.employerId)?.name || ''}, ${fmtDay(ui.shift.date)} ${ui.shift.start}–${ui.shift.end}.`, 'Slett vakt', true)) {
-    const gone = { ...ui.shift };
+  if (await confirmBox('Slette vakta?', `${empById(o.employerId)?.name || ''}, ${fmtDay(o.date)} ${o.start}–${o.end}.`, 'Slett vakt', true)) {
+    const gone = { ...o };
     store.deleteShift(gone.id);
     toast('Vakt slettet', () => { store.upsertShift(gone); toast('Vakta er tilbake'); });
   }
@@ -852,6 +1015,10 @@ const start = ['uke', 'oversikt', 'arbeidsgivere', 'konto'].includes(hashTab) ? 
 setTab(start);
 if (initialHash === '#om') showLanding(true);
 store.init().then(() => {
+  if (store.user) {
+    const once = () => { if (store.status === 'synced') { store.removeEventListener('status', once); extendSeries(); } };
+    store.addEventListener('status', once); once();
+  } else extendSeries();
   // Nye besøkende uten konto og uten data ser landingssiden først.
   if (!ui.landing && !store.user && !D().employers.length && !localStorage.getItem(WELCOME_KEY) && !initialHash) showLanding(true);
   render();

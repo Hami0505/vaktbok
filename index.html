@@ -202,15 +202,23 @@
       <label>Slutt<input type="time" id="fEnd" required></label>
       <label class="span2">Ubetalt pause (minutter)<input type="number" id="fBreak" min="0" max="600" step="5" value="0" inputmode="numeric"></label>
       <div class="span2 repeat" id="repeatFields">
-        <label>Gjenta
-          <select id="fRepeat">
-            <option value="0">Ikke gjenta</option>
-            <option value="7">Hver uke</option>
-            <option value="14">Annenhver uke</option>
-          </select>
-        </label>
-        <label id="repeatUntilLabel" hidden>Til og med<input type="date" id="fRepeatUntil"></label>
+        <label>Gjenta<select id="fRepeat"></select></label>
+        <div id="repeatCustom" class="repeat-custom" hidden>
+          <div class="repeat-every"><span>Hver</span>
+            <input type="number" id="fRepN" min="1" max="52" value="1" inputmode="numeric" aria-label="Antall">
+            <select id="fRepUnit" aria-label="Enhet"><option value="week">uke</option><option value="day">dag</option></select>
+          </div>
+          <div class="days" id="fRepDays" role="group" aria-label="Ukedager"></div>
+        </div>
+        <fieldset id="repeatEnd" class="repeat-end" hidden>
+          <legend>Slutter</legend>
+          <label class="check"><input type="radio" name="repEnd" value="never" checked> Aldri</label>
+          <label class="check"><input type="radio" name="repEnd" value="until"> Dato <input type="date" id="fRepUntil" aria-label="Sluttdato"></label>
+          <label class="check"><input type="radio" name="repEnd" value="count"> Etter <input type="number" id="fRepCount" min="1" max="400" value="10" inputmode="numeric" aria-label="Antall ganger"> ganger</label>
+        </fieldset>
+        <p class="help" id="repeatDesc"></p>
       </div>
+      <p class="help span2 series-info" id="seriesInfo" hidden></p>
       <label class="span2">Notat (valgfritt)
         <input type="text" id="fNote" maxlength="200" placeholder="F.eks. avdeling eller vaktkode" aria-describedby="noteHelp">
         <span class="help" id="noteHelp">Ikke skriv navn eller opplysninger om andre personer, som pasienter, brukere eller kunder.</span>
@@ -343,6 +351,16 @@
       <button class="btn primary" type="button" id="impNext" hidden>Hent kalender</button>
       <button class="btn primary" type="submit" id="impGo" hidden>Importer</button>
     </div>
+  </form>
+</dialog>
+
+<!-- Valg for serier -->
+<dialog id="choiceDialog" aria-labelledby="choiceTitle">
+  <form method="dialog">
+    <h2 id="choiceTitle"></h2>
+    <p id="choiceText" class="muted"></p>
+    <div class="choices" id="choiceList"></div>
+    <div class="dialog-actions"><span class="spacer"></span><button class="btn" value="cancel">Avbryt</button></div>
   </form>
 </dialog>
 

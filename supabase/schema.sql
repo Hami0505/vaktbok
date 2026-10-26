@@ -106,3 +106,8 @@ create or replace function public.keepalive() returns timestamptz
 language sql stable set search_path = '' as $$ select now() $$;
 revoke all on function public.keepalive() from public;
 grant execute on function public.keepalive() to anon, authenticated;
+
+-- ---------- Gjentakende vakter ----------
+-- Vakter i samme serie har samme series_id. Selve regelen ligger i settings.data.series.
+alter table public.shifts add column if not exists series_id uuid;
+create index if not exists shifts_series_idx on public.shifts (user_id, series_id) where series_id is not null;

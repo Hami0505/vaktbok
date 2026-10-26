@@ -22,11 +22,11 @@ const emptyData = () => ({ employers: [], shifts: [], settings: { ...DEFAULT_SET
 // Radkonvertering app <-> database
 const toRow = {
   employers: (e, uid) => ({ id: e.id, user_id: uid, name: e.name, color: e.color, rate: e.rate, rules: e.rules || [], overtime: e.overtime || null, archived: !!e.archived }),
-  shifts: (s, uid) => ({ id: s.id, user_id: uid, employer_id: s.employerId, date: s.date, start_time: s.start, end_time: s.end, break_min: s.breakMin || 0, note: s.note || '' }),
+  shifts: (s, uid) => ({ id: s.id, user_id: uid, employer_id: s.employerId, date: s.date, start_time: s.start, end_time: s.end, break_min: s.breakMin || 0, note: s.note || '', series_id: s.seriesId || null }),
 };
 const fromRow = {
   employers: r => ({ id: r.id, name: r.name, color: r.color, rate: Number(r.rate), rules: r.rules || [], overtime: r.overtime, archived: r.archived }),
-  shifts: r => ({ id: r.id, employerId: r.employer_id, date: r.date, start: r.start_time.slice(0, 5), end: r.end_time.slice(0, 5), breakMin: r.break_min, note: r.note || '' }),
+  shifts: r => ({ id: r.id, employerId: r.employer_id, date: r.date, start: r.start_time.slice(0, 5), end: r.end_time.slice(0, 5), breakMin: r.break_min, note: r.note || '', seriesId: r.series_id || null }),
 };
 
 export class Store extends EventTarget {
@@ -227,7 +227,17 @@ export class Store extends EventTarget {
         const chunk = table === 'settings' ? ops.slice(-1) : ops.slice(i, i + 500);
         let res;
         if (table === 'settings') res = await this.sb.from('settings').upsert({ user_id: uid, data: chunk[0].row });
-        else if (op === 'upsert') res = await this.sb.from(table).upsert(chunk.map(o => toRow[table](o.row, uid)));
+        else if (op === 'upsert') {
+          const rows = chunk.map(o => toRow[table](o.row, uid));
+          if (table === 'shifts' && this.noSeriesColumn) rows.forEach(r => delete r.series_id);
+          res = await this.sb.from(table).upsert(rows);
+          // Databasen mangler series_id (oppdatert SQL ikke kjørt ennå): lagre uten, og si fra under Konto.
+          if (res.error && table === 'shifts' && /series_id/.test(res.error.message || '')) {
+            this.noSeriesColumn = true; this.emit('status');
+            rows.forEach(r => delete r.series_id);
+            res = await this.sb.from(table).upsert(rows);
+          }
+        }
         else res = await this.sb.from(table).delete().in('id', chunk.map(o => o.id));
         if (res.error) {
           // Integritets-/tilgangsfeil løses ikke ved å prøve igjen: forkast, så retter neste henting opp lokalt.

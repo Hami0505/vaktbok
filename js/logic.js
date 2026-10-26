@@ -270,6 +270,75 @@ export function repeatDates(start, until, stepDays, max = 60) {
   return out;
 }
 
+// ---------- Gjentakende vakter (serier) ----------
+// Regel: { freq: 'day' | 'week', interval: n, days: [0..6] (for uker), end: { type: 'never' | 'until' | 'count', until, count } }
+// Første forekomst er startdatoen (for uker: første valgte ukedag fra og med startdatoen).
+
+export const SERIES_HORIZON_DAYS = 366; // «slutter aldri» lages ett år frem og fylles på løpende
+
+export function seriesDates(rule, start, from = start, to = null, max = 1000) {
+  const out = [];
+  const s0 = parseDate(start);
+  const last = rule.end?.type === 'until' && rule.end.until ? rule.end.until : null;
+  const stop = [to, last].filter(Boolean).sort()[0] || null;
+  const maxCount = rule.end?.type === 'count' ? Math.max(1, Number(rule.end.count) || 1) : Infinity;
+  const interval = Math.max(1, Number(rule.interval) || 1);
+  let n = 0;
+  const take = d => {
+    const iso = isoDate(d);
+    if (stop && iso > stop) return false;
+    n++;
+    if (iso >= from) out.push(iso);
+    return n < maxCount && out.length < max;
+  };
+  if (rule.freq === 'day') {
+    for (let i = 0; i < 20000; i++) if (!take(new Date(s0.getFullYear(), s0.getMonth(), s0.getDate() + i * interval))) break;
+  } else {
+    const days = [...new Set(rule.days && rule.days.length ? rule.days : [s0.getDay()])].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7));
+    const mon = mondayOf(s0);
+    outer: for (let w = 0; w < 5000; w++) {
+      for (const d of days) {
+        const dt = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + w * 7 * interval + ((d + 6) % 7));
+        if (dt < s0) continue;
+        if (!take(dt)) break outer;
+      }
+    }
+  }
+  return out;
+}
+
+const DAYS_FULL = ['søndag', 'mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag', 'lørdag'];
+const joinNo = a => a.length < 2 ? a.join('') : `${a.slice(0, -1).join(', ')} og ${a.at(-1)}`;
+
+export function describeRepeat(rule) {
+  if (!rule) return '';
+  const n = Math.max(1, Number(rule.interval) || 1);
+  let base;
+  if (rule.freq === 'day') base = n === 1 ? 'Hver dag' : `Hver ${n}. dag`;
+  else {
+    const days = [...(rule.days || [])].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7));
+    const isWeekdays = n === 1 && days.join() === '1,2,3,4,5';
+    const every = n === 1 ? 'Hver uke' : n === 2 ? 'Annenhver uke' : `Hver ${n}. uke`;
+    base = isWeekdays ? 'Hver ukedag (mandag–fredag)' : `${every} på ${joinNo(days.map(d => DAYS_FULL[d]))}`;
+  }
+  const e = rule.end || { type: 'never' };
+  const end = e.type === 'until' && e.until ? `, til og med ${Number(e.until.slice(8))}.${Number(e.until.slice(5, 7))}.${e.until.slice(0, 4)}`
+    : e.type === 'count' ? `, ${e.count} ${Number(e.count) === 1 ? 'gang' : 'ganger'}` : ', slutter aldri';
+  return base + end;
+}
+
+export function validateRepeat(rule, start) {
+  const errors = [];
+  const n = Number(rule.interval);
+  if (!Number.isInteger(n) || n < 1 || n > 52) errors.push('Gjentakelsen må være hver 1. til hver 52. dag eller uke.');
+  if (rule.freq === 'week' && !(rule.days || []).length) errors.push('Velg minst én ukedag vakta skal gjentas på.');
+  const e = rule.end || {};
+  if (e.type === 'until' && (!e.until || e.until < start)) errors.push('Sluttdatoen må være samme dag som vakta eller senere.');
+  if (e.type === 'until' && e.until && parseDate(e.until) - parseDate(start) > 3 * 366 * 86400000) errors.push('Sluttdatoen kan være maks tre år frem. Velg «Aldri» for faste vakter uten slutt.');
+  if (e.type === 'count' && !(Number(e.count) >= 1 && Number(e.count) <= 400)) errors.push('Antall ganger må være mellom 1 og 400.');
+  return errors;
+}
+
 // ---------- Oppsummering og eksport ----------
 
 export function shiftsInMonth(shifts, ym) {

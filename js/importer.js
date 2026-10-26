@@ -334,7 +334,7 @@ export function setupImporter(ctx) {
         if (!L.validateEmployer(emp).length) employers.push(emp);
       }
       const known = [...D().employers, ...employers];
-      const shifts = (data.shifts || []).filter(s => idMap.has(s.employerId)).map(s => ({ ...s, id: newId(), employerId: idMap.get(s.employerId) }))
+      const shifts = (data.shifts || []).filter(s => idMap.has(s.employerId)).map(s => ({ ...s, id: newId(), employerId: idMap.get(s.employerId), seriesId: null }))
         .filter(s => !L.validateShift(s, known).length);
       parsed = { employers, shifts, merged: idMap.size - employers.length };
     } else {

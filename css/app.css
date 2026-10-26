@@ -338,3 +338,23 @@ body.show-landing .tabs, body.show-landing main, body.show-landing #banners { di
   .group-emp { width: 100%; padding-left: 28px; }
 }
 .flag.missing { background: var(--warn-bg); color: var(--warn); display: inline-block; margin: 4px 0 0; padding: 2px 8px; }
+
+/* Gjentakelse */
+.repeat { grid-template-columns: 1fr; }
+.repeat-custom { display: grid; gap: 10px; }
+.repeat-every { display: flex; gap: 8px; align-items: center; }
+.repeat-every input { width: 70px; }
+.repeat-every select { width: auto; }
+.repeat-end { margin: 0; display: grid; gap: 4px; }
+.repeat-end label.check { margin: 2px 0; }
+.repeat-end input[type=date], .repeat-end input[type=number] { width: auto; min-height: 36px; padding: 4px 8px; }
+.repeat-end input[type=number] { width: 70px; }
+.series-info { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--paper); }
+.choices { display: grid; gap: 8px; margin-top: 12px; }
+.choices .btn { justify-content: flex-start; }
+.series-mark { color: var(--muted); font-weight: 400; }
+.repeat .days { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.repeat .days .chip { display: inline-block; }
+input[type="radio"] { width: 20px; min-height: 20px; height: 20px; margin: 0; accent-color: var(--accent); flex: none; }
+.repeat-end label.check { display: flex; flex-direction: row; align-items: center; gap: 8px; flex-wrap: wrap; }
+.repeat-end input[type=date] { min-width: 150px; }

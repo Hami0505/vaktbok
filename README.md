@@ -15,7 +15,8 @@ Videreutviklingen er gjort på samme måte som innleveringen: jeg beskrev behov 
 
 ## Funksjoner
 
-- **Vakter på tvers av arbeidsgivere** med ukevisning på en 24-timers stripe, vakter over midnatt, pause og notat. Kopier en vakt til neste dag eller uke, gjenta faste vakter hver eller annenhver uke, og angre sletting.
+- **Vakter på tvers av arbeidsgivere** med ukevisning på en 24-timers stripe, vakter over midnatt, pause og notat. Kopier en vakt til neste dag eller uke, og angre sletting.
+- **Gjentakende vakter** som i kalenderapper: hver dag, hver uke, annenhver uke, hver ukedag, eller egendefinert (hver *n*. dag eller uke på valgte ukedager), som slutter aldri, på en dato eller etter et antall ganger. Ved endring og sletting velger du «bare denne», «denne og alle senere» eller «alle i serien». Serier uten slutt fylles på automatisk ett år frem.
 - **Lønnsestimat med ekte tilleggsregler** per arbeidsgiver: så mange tillegg du vil (kveld, natt, lørdag, søndag, helligdager), i kroner per time eller prosent av timelønn, med valgfrie dager og klokkeslett. Kopier tillegg fra en arbeidsgiver til en annen.
 - **Norske helligdager** regnes ut automatisk, inkludert påske og pinse.
 - **Overtid** per dag og/eller per uke, per arbeidsgiver, slik arbeidsmiljøloven regner det.
@@ -46,7 +47,7 @@ Ren HTML, CSS og JavaScript-moduler. Ingen build-steg, så appen ligger rett på
 | `js/config.js` | Supabase-nøkler og kontaktadresse (offentlige verdier, tilgang styres av RLS) |
 | `supabase/schema.sql` | Tabeller, tilganger, Row Level Security, sanntid og sletting av konto |
 | `sw.js` | Service worker for offline-bruk |
-| `tests/` | 47 automatiske tester, kjøres på hver push via GitHub Actions |
+| `tests/` | 49 automatiske tester, kjøres på hver push via GitHub Actions |
 
 Lagring er lokal først: alle endringer lagres i nettleseren med en gang og legges i en utboks. Når brukeren er innlogget og på nett, sendes utboksen til Supabase og serverdata hentes inn. Andre enheter får beskjed i sanntid. Serveren er fasit, unntatt for endringer som ennå ikke er sendt.
 

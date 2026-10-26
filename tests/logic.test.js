@@ -387,3 +387,31 @@ test('regneark: norske datoer, komma som skilletegn og ugyldige rader', () => {
   assert.equal(r.skipped.invalid, 1);
   assert.equal(L.normTime('24:00'), '00:00'); assert.equal(L.normDate('1.2.2027'), '2027-02-01'); assert.equal(L.normTime('25:00'), null);
 });
+
+test('serier: ukedager, intervall, antall og sluttdato', () => {
+  const tueThu = { freq: 'week', interval: 1, days: [2, 4], end: { type: 'never' } };
+  assert.deepEqual(L.seriesDates(tueThu, '2026-11-03', '2026-11-03', '2026-11-13'), ['2026-11-03', '2026-11-05', '2026-11-10', '2026-11-12']);
+  const every3 = { freq: 'week', interval: 3, days: [1], end: { type: 'count', count: 3 } };
+  assert.deepEqual(L.seriesDates(every3, '2026-11-02'), ['2026-11-02', '2026-11-23', '2026-12-14']);
+  const daily = { freq: 'day', interval: 2, end: { type: 'until', until: '2026-11-08' } };
+  assert.deepEqual(L.seriesDates(daily, '2026-11-02'), ['2026-11-02', '2026-11-04', '2026-11-06', '2026-11-08']);
+  // påfylling: antall teller fra start, også når vi henter et senere vindu
+  const five = { freq: 'week', interval: 1, days: [2, 4], end: { type: 'count', count: 5 } };
+  assert.deepEqual(L.seriesDates(five, '2026-11-03', '2026-11-10'), ['2026-11-10', '2026-11-12', '2026-11-17']);
+  // startdato midt i uka: bare dager fra og med start
+  assert.deepEqual(L.seriesDates({ freq: 'week', interval: 1, days: [1, 5], end: { type: 'count', count: 3 } }, '2026-11-04'), ['2026-11-06', '2026-11-09', '2026-11-13']);
+  // over sommertid/vintertid
+  assert.deepEqual(L.seriesDates({ freq: 'day', interval: 1, end: { type: 'count', count: 3 } }, '2026-10-24'), ['2026-10-24', '2026-10-25', '2026-10-26']);
+});
+
+test('serier: beskrivelse og validering', () => {
+  assert.equal(L.describeRepeat({ freq: 'week', interval: 1, days: [4, 2], end: { type: 'never' } }), 'Hver uke på tirsdag og torsdag, slutter aldri');
+  assert.equal(L.describeRepeat({ freq: 'week', interval: 2, days: [6], end: { type: 'count', count: 4 } }), 'Annenhver uke på lørdag, 4 ganger');
+  assert.equal(L.describeRepeat({ freq: 'week', interval: 1, days: [1, 2, 3, 4, 5], end: { type: 'until', until: '2026-12-31' } }), 'Hver ukedag (mandag–fredag), til og med 31.12.2026');
+  assert.equal(L.describeRepeat({ freq: 'day', interval: 3, end: { type: 'never' } }), 'Hver 3. dag, slutter aldri');
+  assert.deepEqual(L.validateRepeat({ freq: 'week', interval: 1, days: [2], end: { type: 'never' } }, '2026-11-03'), []);
+  assert.ok(L.validateRepeat({ freq: 'week', interval: 1, days: [], end: { type: 'never' } }, '2026-11-03').length, 'ingen ukedager');
+  assert.ok(L.validateRepeat({ freq: 'week', interval: 0, days: [2], end: { type: 'never' } }, '2026-11-03').length, 'intervall 0');
+  assert.ok(L.validateRepeat({ freq: 'day', interval: 1, end: { type: 'until', until: '2026-11-01' } }, '2026-11-03').length, 'slutt før start');
+  assert.ok(L.validateRepeat({ freq: 'day', interval: 1, end: { type: 'count', count: 0 } }, '2026-11-03').length, 'antall 0');
+});
