@@ -329,3 +329,12 @@ body.show-landing .tabs, body.show-landing main, body.show-landing #banners { di
 .imp-details summary { cursor: pointer; font-weight: 700; padding: 6px 0; }
 .imp-row .emp { color: var(--muted); font-size: .85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%; }
 #impGroupsWrap h3 { font-size: 1rem; margin: 16px 0 2px; }
+
+.imp-group .hint { display: block; font-size: .8rem; color: var(--muted); font-weight: 400; }
+.group-emp { display: flex; flex-direction: column; gap: 6px; width: 240px; flex: none; }
+.group-emp select, .group-emp input { width: 100%; max-width: none; min-height: 36px; padding: 4px 8px; font-size: .875rem; }
+@media (max-width: 560px) {
+  .imp-group { flex-wrap: wrap; }
+  .group-emp { width: 100%; padding-left: 28px; }
+}
+.flag.missing { background: var(--warn-bg); color: var(--warn); display: inline-block; margin: 4px 0 0; padding: 2px 8px; }

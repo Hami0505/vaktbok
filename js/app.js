@@ -323,7 +323,7 @@ function renderEmployers() {
     return `<div class="item"><button class="open" data-action="edit-emp" data-id="${e.id}" aria-label="Endre ${esc(e.name)}">
       <span class="who"><span class="dot" style="background:${safeColor(e.color)}"></span>${esc(e.name)}${e.archived ? ' <span class="small muted">(skjult)</span>' : ''}</span>
       <span class="num">${num(e.rate, 0)} kr/t</span>
-      <span class="meta">${rules.length ? rules.map(esc).join('<br>') : 'Ingen tillegg'}</span>
+      <span class="meta">${rules.length ? rules.map(esc).join('<br>') : 'Ingen tillegg'}${!(Number(e.rate) > 0) ? '<br><span class="flag missing">Mangler timelønn, trykk for å legge inn</span>' : ''}</span>
       <span class="meta num">${n} ${n === 1 ? 'vakt' : 'vakter'}</span></button></div>`;
   }).join('');
 }
