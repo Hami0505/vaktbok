@@ -744,10 +744,11 @@ function renderAccount() {
   } else {
     const n = store.pending;
     p.innerHTML = `<h2>Konto</h2>
-      <p>Logget inn som <b>${esc(store.user.email)}</b></p>
+      <p>${store.profile?.display_name ? `Hei, <b>${esc(store.profile.display_name)}</b>. ` : ''}Logget inn som <b>${esc(store.user.email)}</b></p>
       ${store.missingCols?.size ? `<p class="flag block rest">Databasen mangler ${[...store.missingCols].map(c => ({ series_id: 'gjentakende vakter', fee: 'beløp per vakt', pay: 'honorar og frivillig' })[c]).join(' og ')}. Vaktene lagres, men dette synkes ikke mellom enheter før du kjører oppdatert SQL fra README i Supabase.</p>` : ''}
       <p class="small muted">${n ? `${n} ${n === 1 ? 'endring' : 'endringer'} venter på å bli synket.` : 'Alle endringer er synket.'}${store.lastError ? ` ${esc(friendlyError(store.lastError))}${contact ? ` Vedvarer feilen, kontakt <a href="mailto:${esc(contact)}">${esc(contact)}</a>.` : ''}` : ''}</p>
-      <div class="row"><button class="btn" data-action="sync-now">Synk nå</button><button class="btn" data-action="sign-out">Logg ut</button></div>`;
+      ${store.noProfiles ? '<p class="flag block rest">Databasen mangler tabellen for navn og aktivitet. Kjør oppdatert SQL fra README i Supabase.</p>' : ''}
+      <div class="row"><button class="btn" data-action="sync-now">Synk nå</button>${store.noProfiles ? '' : '<button class="btn" data-action="edit-name">Endre navn</button>'}<button class="btn" data-action="sign-out">Logg ut</button></div>`;
   }
   const s = D().settings;
   $('sHoliday').value = String(s.holidayPayPct);
@@ -806,6 +807,7 @@ function render() {
 }
 
 const actions = {
+  'edit-name': () => openNameDialog(false),
   'go-login': () => { $('importDialog').close(); setTab('konto'); $('emailInput')?.focus(); },
   'go-settings': () => { setTab('konto'); $('sTax').focus(); },
   'landing-demo': () => { leaveLanding('uke'); loadDemo(); },
@@ -1052,6 +1054,37 @@ store.addEventListener('guest-data', async ({ detail }) => {
   if (ok) { store.addAll({ employers: detail.employers || [], shifts: detail.shifts || [] }); store.clearGuestData(); toast('Vaktene er lagt til i kontoen'); }
 });
 
+// ---------- Navn ----------
+function openNameDialog(required) {
+  const d = $('nameDialog');
+  if (d.open) return;
+  $('nameTitle').textContent = required ? 'Hva vil du kalles?' : 'Endre navn';
+  $('nameInput').value = store.profile?.display_name || '';
+  $('nameErrors').innerHTML = '';
+  $('nameCancel').hidden = required;
+  d.dataset.required = required ? '1' : '';
+  d.showModal();
+  $('nameInput').focus();
+}
+// Navnet må fylles inn: Escape lukker ikke vinduet første gang.
+$('nameDialog').addEventListener('cancel', ev => { if ($('nameDialog').dataset.required) ev.preventDefault(); });
+$('nameCancel').addEventListener('click', () => $('nameDialog').close());
+$('nameForm').addEventListener('submit', async ev => {
+  ev.preventDefault();
+  const v = $('nameInput').value.trim();
+  if (v.length < 2) { $('nameErrors').innerHTML = '<li>Skriv minst 2 tegn.</li>'; return; }
+  try {
+    const n = await store.setDisplayName(v);
+    $('nameDialog').close();
+    toast(`Hei, ${n}!`);
+    renderAccount();
+  } catch (e) { $('nameErrors').innerHTML = `<li>${esc(friendlyError(e))}</li>`; }
+});
+store.addEventListener('profile', () => {
+  if (ui.tab === 'konto') renderAccount();
+  if (store.user && store.profile && !store.profile.display_name && !store.noProfiles) openNameDialog(true);
+});
+
 // ---------- Import ----------
 const importer = setupImporter({
   store, D, $, esc, toast, fmtDay, setTab, openEmp, newId, confirmBox, friendlyError,
@@ -1084,7 +1117,7 @@ setTab(start);
 if (initialHash === '#om') showLanding(true);
 store.init().then(() => {
   if (store.user) {
-    const once = () => { if (store.status === 'synced') { store.removeEventListener('status', once); extendSeries(); } };
+    const once = () => { if (store.status === 'synced') { store.removeEventListener('status', once); extendSeries(); store.loadProfile(); } };
     store.addEventListener('status', once); once();
   } else extendSeries();
   // Nye besøkende uten konto og uten data ser landingssiden først.

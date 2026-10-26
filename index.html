@@ -376,6 +376,20 @@
   </form>
 </dialog>
 
+<!-- Navn -->
+<dialog id="nameDialog" aria-labelledby="nameTitle">
+  <form method="dialog" id="nameForm" novalidate>
+    <h2 id="nameTitle">Hva vil du kalles?</h2>
+    <p class="muted" id="nameText">Navnet vises i appen og hjelper oss å vite hvem kontoen tilhører hvis du tar kontakt. Fornavn eller kallenavn holder.</p>
+    <label>Navn<input type="text" id="nameInput" maxlength="40" autocomplete="name" required></label>
+    <ul class="errors" id="nameErrors" role="alert"></ul>
+    <div class="dialog-actions"><span class="spacer"></span>
+      <button class="btn" type="button" id="nameCancel" hidden>Avbryt</button>
+      <button class="btn primary" type="submit">Lagre</button>
+    </div>
+  </form>
+</dialog>
+
 <!-- Valg for serier -->
 <dialog id="choiceDialog" aria-labelledby="choiceTitle">
   <form method="dialog">

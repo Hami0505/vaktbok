@@ -99,6 +99,7 @@ export class Store extends EventTarget {
   }
 
   useScope(user) {
+    if ((user && user.id) !== (this.user && this.user.id)) this.profile = null;
     this.user = user ? { id: user.id, email: user.email } : null;
     if (this.sb) this.user ? this.subscribe() : this.unsubscribe();
     this.data = { ...emptyData(), ...read(K.data(this.scope), {}) };
@@ -115,6 +116,7 @@ export class Store extends EventTarget {
       const guest = read(K.data('guest'), null);
       if (guest && (guest.shifts?.length || guest.employers?.length)) this.emit('guest-data', guest);
       await this.sync();
+      this.loadProfile();
     }
   }
 
@@ -280,6 +282,35 @@ export class Store extends EventTarget {
   }
 
   // ---------- Konto ----------
+
+  // ---------- Profil: navn og sist aktiv ----------
+  // Tabellen profiles finnes bare når oppdatert SQL er kjørt. Uten den virker alt annet som før.
+  async loadProfile() {
+    if (!this.sb || !this.user) return null;
+    const { data, error } = await this.sb.from('profiles').select('display_name,last_seen').maybeSingle();
+    if (error) { this.noProfiles = /profiles|42P01|PGRST205/i.test(`${error.code} ${error.message}`); return null; }
+    this.noProfiles = false;
+    this.profile = data || { display_name: null, last_seen: null };
+    const today = new Date(); const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    if (this.profile.last_seen !== iso) {
+      const r = await this.sb.from('profiles').upsert({ user_id: this.user.id, last_seen: iso });
+      if (!r.error) this.profile.last_seen = iso;
+    }
+    this.emit('profile');
+    return this.profile;
+  }
+
+  async setDisplayName(name) {
+    const clean = String(name || '').trim().replace(/\s+/g, ' ');
+    if (clean.length < 2 || clean.length > 40) throw new Error('name-length');
+    const { error } = await this.sb.from('profiles').upsert({ user_id: this.user.id, display_name: clean });
+    if (error) throw new Error(error.message);
+    // Vises også som «Display name» under Authentication → Users i Supabase.
+    try { await this.sb.auth.updateUser({ data: { display_name: clean } }); } catch { }
+    this.profile = { ...(this.profile || {}), display_name: clean };
+    this.emit('profile');
+    return clean;
+  }
 
   // Henter en kalender via serverfunksjonen ics-proxy (supabase/functions/ics-proxy). Krever innlogging.
   async fetchCalendar(url) {

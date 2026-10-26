@@ -117,3 +117,18 @@ create index if not exists shifts_series_idx on public.shifts (user_id, series_i
 -- shifts.fee: avtalt beløp for akkurat denne vakta (honorar eller fast pris)
 alter table public.employers add column if not exists pay jsonb;
 alter table public.shifts add column if not exists fee numeric(10,2) check (fee is null or fee between 0 and 1000000);
+
+-- ---------- Profil: navn og sist aktiv ----------
+-- display_name: navnet brukeren vil kalles. last_seen: datoen appen sist ble åpnet (for å telle aktive brukere).
+create table if not exists public.profiles (
+  user_id      uuid primary key default auth.uid() references auth.users (id) on delete cascade,
+  display_name text check (display_name is null or char_length(display_name) between 2 and 40),
+  last_seen    date,
+  created_at   timestamptz not null default now()
+);
+alter table public.profiles enable row level security;
+drop policy if exists "egen profil" on public.profiles;
+create policy "egen profil" on public.profiles for all to authenticated
+  using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+grant select, insert, update, delete on public.profiles to authenticated;
+revoke all on public.profiles from anon;

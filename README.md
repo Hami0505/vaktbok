@@ -110,6 +110,12 @@ Uten egen SMTP sender Supabase bare noen få e-poster i timen, og bare med innlo
 
 Sendes e-postene fra en Gmail-adresse, kan de havne i søppelpost. Et eget domene som er bekreftet hos e-posttjenesten løser det.
 
+## Statistikk og brukere
+
+Brukerne oppgir navn ved første innlogging, og appen lagrer datoen de sist åpnet den (tabellen `profiles`). Navnet vises også som «Display name» under Authentication → Users.
+
+Spørringer for antall brukere, aktive brukere og en brukerliste ligger i `supabase/admin/statistikk.sql`. Lim dem inn i SQL Editor og lagre dem der, så har du dem for hånd. De virker bare i dashbordet, ikke fra appen.
+
 ## Før flere brukere slipper til
 
 - [x] Egen SMTP

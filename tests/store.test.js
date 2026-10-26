@@ -141,3 +141,27 @@ test('synk virker også når databasen mangler nye kolonner (fee, series_id, pay
   assert.equal(saved.shifts.length, 1);
   assert.ok(!('fee' in saved.shifts[0]) && !('series_id' in saved.shifts[0]));
 });
+
+test('profil: henter, markerer sist aktiv én gang per dag og lagrer navn', async () => {
+  const s4 = new Store({ supabaseUrl: 'x', supabaseAnonKey: 'y' });
+  s4.user = { id: 'u1' };
+  let row = null, upserts = 0, meta = null;
+  s4.sb = {
+    from: () => ({
+      select: () => ({ maybeSingle: async () => ({ data: row, error: null }) }),
+      upsert: async r => { upserts++; row = { ...(row || {}), ...r }; return { error: null }; },
+    }),
+    auth: { updateUser: async ({ data }) => { meta = data; return {}; } },
+  };
+  const p = await s4.loadProfile();
+  assert.equal(p.display_name, null);
+  assert.ok(row.last_seen, 'sist aktiv lagret');
+  await s4.loadProfile();
+  assert.equal(upserts, 1, 'bare én oppdatering per dag');
+  await assert.rejects(() => s4.setDisplayName(' a '), /name-length/);
+  assert.equal(await s4.setDisplayName('  Hamza   Aziz '), 'Hamza Aziz');
+  assert.equal(row.display_name, 'Hamza Aziz'); assert.deepEqual(meta, { display_name: 'Hamza Aziz' });
+  const s5 = new Store({ supabaseUrl: 'x', supabaseAnonKey: 'y' }); s5.user = { id: 'u2' };
+  s5.sb = { from: () => ({ select: () => ({ maybeSingle: async () => ({ data: null, error: { code: 'PGRST205', message: "Could not find the table 'public.profiles'" } }) }) }) };
+  assert.equal(await s5.loadProfile(), null); assert.ok(s5.noProfiles, 'manglende tabell oppdages');
+});
