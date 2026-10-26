@@ -494,7 +494,7 @@ export function monthSummary(shifts, employers, ym, settings = DEFAULT_SETTINGS)
 // Hele året: per måned, per arbeidsgiver og totalt. Regner alle vakter én gang.
 export function yearSummary(shifts, employers, year, settings = DEFAULT_SETTINGS) {
   const all = calcAllNet(shifts, employers, settings);
-  const months = Array.from({ length: 12 }, (_, i) => ({ ym: `${year}-${pad(i + 1)}`, hours: 0, pay: 0, net: 0, count: 0 }));
+  const months = Array.from({ length: 12 }, (_, i) => ({ ym: `${year}-${pad(i + 1)}`, hours: 0, pay: 0, net: 0, count: 0, byEmp: {} }));
   const byEmp = {};
   const total = { hours: 0, pay: 0, net: 0, count: 0, holidayBase: 0 };
   for (const s of shifts) {
@@ -503,6 +503,8 @@ export function yearSummary(shifts, employers, year, settings = DEFAULT_SETTINGS
     total.holidayBase += c.holidayBase || 0;
     const e = byEmp[s.employerId] ||= { hours: 0, pay: 0, net: 0, count: 0 };
     for (const t of [m, e, total]) { t.hours += c.hours; t.pay += c.pay; t.net += c.net; t.count++; }
+    const me = m.byEmp[s.employerId] ||= { pay: 0, net: 0, hours: 0 };
+    me.pay += c.pay; me.net += c.net; me.hours += c.hours;
   }
   total.holidayPay = total.holidayBase * (Number(settings.holidayPayPct) || 0) / 100;
   return { months, byEmp, total };

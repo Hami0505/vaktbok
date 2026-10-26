@@ -378,3 +378,81 @@ input[type="radio"] { width: 20px; min-height: 20px; height: 20px; margin: 0; ac
 .frikort-panel p { margin: 0 0 6px; }
 #fkWarn.rest { background: var(--warn-bg); color: var(--warn); }
 #fkWarn.overlap { background: var(--bad-bg); color: var(--bad); }
+
+/* =========================================================================
+   Designrunde: flatere, roligere og mer eget.
+   Seksjoner uten bokser, store tall, arbeidsgiverfarger som bærende element.
+   ========================================================================= */
+:root { --radius: 10px; }
+h1 { font-size: 1.7rem; }
+.sync { border: 0; background: none; padding: 4px 0; color: var(--muted); }
+
+/* Faner: understreket på PC, aksentstrek øverst på mobil */
+@media (min-width: 641px) {
+  .tabs { background: none; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 0; gap: 28px; margin: 14px 0 6px; justify-content: flex-start; }
+  .tabs button { flex: none; border-radius: 0; padding: 10px 0; border-bottom: 3px solid transparent; color: var(--muted); margin-bottom: -1px; }
+  .tabs button[aria-selected="true"] { background: none; color: var(--ink); border-bottom-color: var(--accent); font-weight: 700; }
+}
+@media (max-width: 640px) {
+  .tabs button { border-radius: 0; padding-top: 12px; color: var(--muted); }
+  .tabs button[aria-selected="true"] { background: none; color: var(--accent); box-shadow: inset 0 3px 0 var(--accent); font-weight: 700; }
+}
+
+/* Seksjoner uten bokser rundt */
+main .panel { background: none; border: 0; border-top: 1px solid var(--line); border-radius: 0; padding: 22px 0 8px; margin: 0; }
+main > div > .panel:first-child { border-top: 0; padding-top: 10px; }
+h2 { font-size: 1.15rem; }
+.subhead { font-size: .95rem; margin: 20px 0 0; }
+
+/* Overskrift med piler til høyre (uke og måned) */
+.weeknav { justify-content: space-between; align-items: flex-end; margin-bottom: 16px; }
+.weekhead { text-align: left; }
+.weekhead h2 { font-size: 1.7rem; font-weight: 800; letter-spacing: -.025em; line-height: 1.1; }
+.weekhead .range { font-size: .95rem; margin-top: 4px; }
+.weekhead .btn.link { padding: 0; margin-top: 4px; }
+.arrows { display: flex; gap: 6px; }
+.icon-btn { width: 40px; height: 40px; background: var(--card); border-color: var(--line); }
+
+/* Ukestripa: hovedsaken */
+.week { grid-template-columns: 70px 1fr; gap: 8px 12px; }
+.track { height: 40px; border-radius: 6px; background: linear-gradient(90deg, var(--night) 0 25%, var(--card) 25% 70.833%, var(--night) 70.833% 100%); }
+.track .bar { top: 4px; bottom: 4px; border-radius: 4px; line-height: 32px; font-size: .78rem; }
+.week .d.today { position: relative; }
+.week .d.today::before { content: ''; position: absolute; left: -10px; top: 1px; bottom: 1px; width: 3px; border-radius: 2px; background: var(--accent); }
+
+/* Ukas sum som store tall */
+.weeksum { display: flex; gap: 36px; flex-wrap: wrap; margin: 20px 0 16px; color: var(--muted); }
+.weeksum:empty { display: none; }
+.weeksum b { display: block; color: var(--ink); font-size: 1.9rem; font-weight: 800; letter-spacing: -.03em; line-height: 1.1; }
+.weeksum span { font-size: .85rem; }
+.actionbar { margin: 0 0 6px; }
+
+/* Roligere knapper og felt */
+.btn { border-color: var(--line); border-radius: 8px; }
+.btn:hover { border-color: var(--ink); }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn.big { padding: 11px 20px; }
+input, select { border-radius: 8px; }
+dialog { border-radius: 14px; }
+.seg { border-radius: 8px; }
+.seg button { border-radius: 6px; }
+
+/* Vaktrader med arbeidsgiverfarge */
+.item.shift { border-top: 0; border-left: 4px solid var(--emp, var(--accent)); margin: 8px 0; padding: 10px 12px; background: var(--card); border-radius: 0 8px 8px 0; }
+.item.shift .who { font-size: 1rem; }
+.item .acts .btn.link { font-size: .85rem; padding-left: 0; }
+
+/* Oversikt: ett stort hovedtall, resten mindre */
+.totals { grid-template-columns: repeat(2, 1fr); gap: 4px 24px; margin-bottom: 20px; }
+.totals div { border-left: 0; padding-left: 0; }
+.totals .lead { grid-column: 1 / -1; margin-bottom: 6px; }
+.totals .lead b { font-size: 2.6rem; font-weight: 800; letter-spacing: -.04em; }
+.totals b { font-size: 1.3rem; }
+
+/* Stablet årsdiagram i arbeidsgiverfarger */
+.yearchart .stack { display: flex; flex-direction: column-reverse; width: 100%; max-width: 36px; border-radius: 4px 4px 0 0; overflow: hidden; min-height: 2px; background: var(--line); }
+.yearchart .stack span { display: block; min-height: 1px; }
+.yearchart .col.now .m { color: var(--ink); font-weight: 700; }
+.yearchart .col:hover .stack, .yearchart .col:focus-visible .stack { outline: 2px solid var(--ink); outline-offset: 1px; }
+.exports .btn { font-size: .9rem; padding: 8px 12px; }
+main .panel[hidden] + .panel { border-top: 0; padding-top: 10px; }

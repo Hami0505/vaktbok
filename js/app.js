@@ -200,7 +200,9 @@ function renderWeek() {
     .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
   let h = 0, pay = 0;
   for (const s of inWeek) { const c = ui.calc.get(s.id); h += c.hours; pay += money(c); }
-  $('weekSum').innerHTML = inWeek.length ? `<b>${hrs(h)}</b> og <b>${kr(pay)}</b> ${payWord()} denne uka` : '';
+  $('weekSum').innerHTML = inWeek.length
+    ? `<div><b>${hrs(h)}</b><span>${inWeek.length} ${inWeek.length === 1 ? 'vakt' : 'vakter'} denne uka</span></div><div><b>${kr(pay)}</b><span>${payWord()[0].toUpperCase() + payWord().slice(1)}</span></div>`
+    : '';
 
   if (!D().employers.length) {
     $('weekList').innerHTML = `<div class="empty"><p>Legg inn arbeidsgiverne dine først, med timelønn og tillegg.</p>
@@ -215,15 +217,15 @@ function renderWeek() {
 
 function shiftItem(s, warn, actions) {
   const emp = empById(s.employerId), c = ui.calc?.get(s.id) || L.calcShift(s, emp);
-  return `<div class="item">
+  return `<div class="item shift" style="--emp:${safeColor(emp?.color)}">
     <button class="open" data-action="edit-shift" data-id="${s.id}" aria-label="Endre vakt ${esc(emp?.name)} ${fmtDay(s.date)}">
-      <span class="who"><span class="dot" style="background:${safeColor(emp?.color)}"></span>${esc(emp ? emp.name : 'Ukjent')}${s.seriesId ? '<span class="series-mark" title="Gjentakende vakt" aria-label="gjentakende"> ↻</span>' : ''}</span>
+      <span class="who">${esc(emp ? emp.name : 'Ukjent')}${s.seriesId ? '<span class="series-mark" title="Gjentakende vakt" aria-label="gjentakende"> ↻</span>' : ''}</span>
       <span class="num">${hrs(c.hours)}</span>
       <span class="meta">${fmtDay(s.date)} ${s.start}–${s.end}${s.breakMin ? `, pause ${s.breakMin} min` : ''}${s.note ? `, ${esc(s.note)}` : ''}</span>
       <span class="meta num">${c.kind === 'volunteer' && !c.pay ? 'Frivillig' : kr(money(c))}${c.overtimeH > 0 ? `, ${hrs(c.overtimeH)} overtid` : ''}</span>
     </button>
     ${warn ? `<div class="flag ${warn.type}">${esc(warningText(warn))}</div>` : ''}
-    ${actions ? `<div class="acts"><button class="btn link" data-action="copy-shift" data-id="${s.id}" data-days="1">Kopier til neste dag</button><button class="btn link" data-action="copy-shift" data-id="${s.id}" data-days="7">Kopier til neste uke</button></div>` : ''}
+    ${actions ? `<div class="acts"><button class="btn link" data-action="copy-menu" data-id="${s.id}">Kopier</button></div>` : ''}
   </div>`;
 }
 
@@ -624,8 +626,8 @@ function renderMonth() {
   $('monthTitle').textContent = `${MONTH[m - 1][0].toUpperCase()}${MONTH[m - 1].slice(1)} ${y}`;
   const { byEmp, total } = L.monthSummary(D().shifts, D().employers, ui.month, D().settings);
   $('totals').innerHTML = `
+    <div class="lead"><b>${kr(money(total))}</b><span>${payWord()[0].toUpperCase() + payWord().slice(1)}</span></div>
     <div><b>${hrs(total.hours)}</b><span>${total.count} vakter</span></div>
-    <div><b>${kr(money(total))}</b><span>${payWord()[0].toUpperCase() + payWord().slice(1)}</span></div>
     <div><b>${kr(total.holidayPay)}</b><span>Feriepenger opptjent${showNet() ? ' (brutto)' : ''}</span></div>`;
   renderPaySeg();
   const bk = total.byKind, parts = [];
@@ -712,8 +714,8 @@ function renderYear(y) {
   ui.yearMonths = months;
   $('yearTitle').textContent = `Hele ${y}`;
   $('yearTotals').innerHTML = `
+    <div class="lead"><b>${kr(money(total))}</b><span>${payWord()[0].toUpperCase() + payWord().slice(1)}</span></div>
     <div><b>${hrs(total.hours)}</b><span>${total.count} vakter</span></div>
-    <div><b>${kr(money(total))}</b><span>${payWord()[0].toUpperCase() + payWord().slice(1)}</span></div>
     <div><b>${kr(total.holidayPay)}</b><span>Feriepenger opptjent${showNet() ? ' (brutto)' : ''}</span></div>`;
   const max = Math.max(...months.map(m => m.pay), 1);
   // Hver søyle er en knapp: hold over eller fokuser for å se tallene, trykk for å åpne måneden.
@@ -721,7 +723,7 @@ function renderYear(y) {
   $('yearChart').innerHTML = months.map((m, i) =>
     `<button type="button" class="col${m.ym === ui.month ? ' now' : ''}" data-ym="${m.ym}" data-i="${i}"
       aria-label="${MONTH[i]}: ${m.count ? `${hrs(m.hours)}, ${kr(money(m))}` : 'ingen vakter'}. Trykk for å vise måneden."${m.ym === ui.month ? ' aria-current="true"' : ''}>
-      <span class="bar" style="height:${Math.round(m.pay / max * 100)}%"></span><span class="m">${MONTH[i].slice(0, 1).toUpperCase()}</span></button>`).join('');
+      <span class="stack" style="height:${Math.round(m.pay / max * 100)}%">${Object.entries(m.byEmp).filter(([, v]) => v.pay > 0).map(([id, v]) => `<span style="flex:${v.pay};background:${safeColor(empById(id)?.color)}"></span>`).join('')}</span><span class="m">${MONTH[i].slice(0, 1).toUpperCase()}</span></button>`).join('');
   const cur = months.findIndex(m => m.ym === ui.month);
   $('yearInfo').innerHTML = cur >= 0 ? yearInfoText(months[cur], cur) : '';
   const ids = Object.keys(byEmp);
@@ -887,10 +889,13 @@ const actions = {
   'edit-shift': el => openShift(D().shifts.find(s => s.id === el.dataset.id)),
   'edit-emp': el => openEmp(empById(el.dataset.id)),
   'new-emp': () => openEmp(),
-  'copy-shift': el => {
+  'copy-menu': async el => {
     const s = D().shifts.find(x => x.id === el.dataset.id); if (!s) return;
-    const date = L.isoDate(addDays(L.parseDate(s.date), Number(el.dataset.days)));
-    store.upsertShift({ ...s, id: undefined, date });
+    const days = await choiceBox('Kopier vakt', `${empById(s.employerId)?.name || ''}, ${fmtDay(s.date)} ${s.start}–${s.end}`,
+      [['1', `Til neste dag (${fmtDay(L.isoDate(addDays(L.parseDate(s.date), 1)))})`], ['7', `Til samme dag neste uke (${fmtDay(L.isoDate(addDays(L.parseDate(s.date), 7)))})`]]);
+    if (!days) return;
+    const date = L.isoDate(addDays(L.parseDate(s.date), Number(days)));
+    store.upsertShift({ ...s, id: undefined, date, seriesId: null });
     toast(`Kopiert til ${fmtDay(date)}`);
   },
   'import-v1': async () => {

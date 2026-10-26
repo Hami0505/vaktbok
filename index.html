@@ -69,23 +69,25 @@
   <main>
     <!-- UKE -->
     <div id="v-uke" role="tabpanel" aria-labelledby="t-uke">
-      <section class="panel">
+      <section class="panel week-panel">
         <div class="weeknav">
-          <button class="icon-btn" id="prevWeek" type="button" aria-label="Forrige uke">‹</button>
           <div class="weekhead">
             <h2 id="weekTitle"></h2>
             <button class="btn link" id="todayBtn" type="button">Gå til i dag</button>
           </div>
-          <button class="icon-btn" id="nextWeek" type="button" aria-label="Neste uke">›</button>
+          <div class="arrows">
+            <button class="icon-btn" id="prevWeek" type="button" aria-label="Forrige uke">‹</button>
+            <button class="icon-btn" id="nextWeek" type="button" aria-label="Neste uke">›</button>
+          </div>
         </div>
         <div class="week" id="week"></div>
         <div class="legend small muted"><span class="swatch" aria-hidden="true"></span>Kveld og natt (17–06)</div>
       </section>
 
+      <div class="weeksum" id="weekSum"></div>
       <div class="actionbar">
         <button class="btn primary big" id="newShiftBtn" type="button">Ny vakt</button>
         <button class="btn big" id="importBtn" type="button">Importer vakter</button>
-        <p class="weeksum" id="weekSum"></p>
       </div>
 
       <section class="panel">
@@ -103,10 +105,12 @@
         <p class="flag block" id="fkWarn" hidden></p>
       </section>
       <section class="panel">
-        <div class="monthnav">
-          <button class="icon-btn" id="prevMonth" type="button" aria-label="Forrige måned">‹</button>
-          <h2 id="monthTitle"></h2>
-          <button class="icon-btn" id="nextMonth" type="button" aria-label="Neste måned">›</button>
+        <div class="weeknav">
+          <div class="weekhead"><h2 id="monthTitle"></h2></div>
+          <div class="arrows">
+            <button class="icon-btn" id="prevMonth" type="button" aria-label="Forrige måned">‹</button>
+            <button class="icon-btn" id="nextMonth" type="button" aria-label="Neste måned">›</button>
+          </div>
         </div>
         <div class="seg" role="radiogroup" aria-label="Vis beløp som">
           <button type="button" role="radio" data-pay="gross" aria-checked="true">Brutto</button>
@@ -118,7 +122,8 @@
         <p class="small muted" id="kindSplit"></p>
         <div class="scroll"><table id="empTable"></table></div>
         <p class="small muted">Estimat. Tillegg, overtid, feriepenger og skatt regnes etter reglene du har lagt inn. Sjekk alltid mot lønnsslippen.</p>
-        <div class="row">
+        <h3 class="subhead">Eksporter</h3>
+        <div class="row exports">
           <button class="btn" id="csvBtn" type="button">Last ned regneark (CSV)</button>
           <button class="btn" id="icsBtn" type="button">Legg i kalenderen (.ics)</button>
           <select id="sheetEmp" class="inline-select" aria-label="Timeliste for"></select>
@@ -303,7 +308,7 @@
         <label>Per dag, etter (timer)<input type="number" id="eOtAfter" min="1" max="24" step="0.5" inputmode="decimal" placeholder="Av"></label>
         <label>Per uke, etter (timer)<input type="number" id="eOtWeek" min="1" max="100" step="0.5" inputmode="decimal" placeholder="Av"></label>
         <label>Tillegg (%)<input type="number" id="eOtPct" min="0" max="300" step="1" inputmode="numeric"></label>
-        <p class="help span-all">Arbeidsmiljøloven regner som hovedregel arbeid over 9 timer i døgnet eller 40 timer i uka som overtid, med minst 40 % tillegg. Tom grense betyr av. Overtid regnes per arbeidsgiver.</p>
+        <p class="help span-all">Arbeidsmiljøloven regner som hovedregel arbeid over 9 timer i døgnet eller 40 timer i uka som overtid, med minst 40 % tillegg. Tom grense betyr av. Overtid regnes per arbeidsgiver. Er du deltidsansatt, er timer utover stillingen din vanligvis <em>merarbeid</em> uten overtidstillegg, helt til du passerer grensene over. Tariffavtaler kan ha andre regler, så spør arbeidsgiveren hvis du er usikker.</p>
       </div>
     </fieldset>
 
