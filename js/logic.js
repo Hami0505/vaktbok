@@ -207,8 +207,9 @@ export function isNorwegianId(digits) {
 // Stopper fødselsnummer i notater. Tåler mellomrom eller punktum etter de seks første sifrene.
 export function noteLooksSensitive(note) {
   const text = String(note || '');
-  for (const m of text.matchAll(/(?<!\d)(\d{6})[\s.]?(\d{5})(?!\d)/g)) {
-    if (isNorwegianId(m[1] + m[2])) return true;
+  // Uten lookbehind, så det virker også i eldre Safari (før iOS 16.4).
+  for (const m of text.matchAll(/(^|\D)(\d{6})[\s.]?(\d{5})(?!\d)/g)) {
+    if (isNorwegianId(m[2] + m[3])) return true;
   }
   return false;
 }
@@ -257,6 +258,18 @@ export function validateEmployer(e) {
   return errors;
 }
 
+// ---------- Gjentakende vakter ----------
+
+// Datoer fra og med start til og med until, med stepDays mellom. Maks max datoer.
+export function repeatDates(start, until, stepDays, max = 60) {
+  const out = [];
+  const end = parseDate(until);
+  for (let d = parseDate(start); d <= end && out.length < max; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + stepDays)) {
+    out.push(isoDate(d));
+  }
+  return out;
+}
+
 // ---------- Oppsummering og eksport ----------
 
 export function shiftsInMonth(shifts, ym) {
@@ -284,6 +297,22 @@ export function monthSummary(shifts, employers, ym, settings = DEFAULT_SETTINGS)
   const tax = Number(settings.taxPct) || 0;
   total.net = tax > 0 ? total.pay * (1 - tax / 100) : null;
   return { byEmp, total };
+}
+
+// Hele året: per måned, per arbeidsgiver og totalt. Regner alle vakter én gang.
+export function yearSummary(shifts, employers, year, settings = DEFAULT_SETTINGS) {
+  const all = calcAll(shifts, employers);
+  const months = Array.from({ length: 12 }, (_, i) => ({ ym: `${year}-${pad(i + 1)}`, hours: 0, pay: 0, count: 0 }));
+  const byEmp = {};
+  const total = { hours: 0, pay: 0, count: 0 };
+  for (const s of shifts) {
+    if (!s.date.startsWith(`${year}-`)) continue;
+    const c = all.get(s.id), m = months[Number(s.date.slice(5, 7)) - 1];
+    const e = byEmp[s.employerId] ||= { hours: 0, pay: 0, count: 0 };
+    for (const t of [m, e, total]) { t.hours += c.hours; t.pay += c.pay; t.count++; }
+  }
+  total.holidayPay = total.pay * (Number(settings.holidayPayPct) || 0) / 100;
+  return { months, byEmp, total };
 }
 
 // Sammenligner estimat med det som faktisk ble utbetalt (brutto) per arbeidsgiver.

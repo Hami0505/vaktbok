@@ -249,3 +249,31 @@ test('eksempeldata er tilfeldige, gyldige og uten overlapp', async () => {
   const sig = r => r.employers.map(e => e.name + e.rate).join() + r.shifts.length;
   assert.ok(new Set(runs.map(sig)).size > 1, 'ulike data hver gang');
 });
+
+test('gjentakende vakter: ukentlig, annenhver uke og maksgrense', () => {
+  assert.deepEqual(L.repeatDates('2026-10-27', '2026-11-24', 7), ['2026-10-27', '2026-11-03', '2026-11-10', '2026-11-17', '2026-11-24']);
+  assert.deepEqual(L.repeatDates('2026-10-27', '2026-11-24', 14), ['2026-10-27', '2026-11-10', '2026-11-24']);
+  assert.equal(L.repeatDates('2026-01-01', '2027-12-31', 7, 60).length, 60);
+  assert.deepEqual(L.repeatDates('2026-03-23', '2026-04-06', 7), ['2026-03-23', '2026-03-30', '2026-04-06'], 'over sommertid');
+});
+
+test('årsoversikt per måned og arbeidsgiver', () => {
+  const shifts = [
+    S({ date: '2026-01-05', start: '08:00', end: '16:00' }),
+    S({ date: '2026-10-21', start: '08:00', end: '16:00' }),
+    S({ employerId: 'e2', date: '2026-10-22', start: '08:00', end: '12:00' }),
+    S({ date: '2025-12-31', start: '08:00', end: '16:00' }),
+  ];
+  const y = L.yearSummary(shifts, [emp, emp2], 2026, { holidayPayPct: 10.2 });
+  assert.equal(y.total.count, 3);
+  close(y.months[0].hours, 8, 'januar'); close(y.months[9].hours, 12, 'oktober'); close(y.months[11].hours, 0, 'desember');
+  close(y.byEmp.e1.pay, 3200, 'arbeidsgiver 1'); close(y.byEmp.e2.pay, 720, 'arbeidsgiver 2');
+  close(y.total.holidayPay, 3920 * 0.102, 'feriepenger');
+});
+
+test('fødselsnummer oppdages også rett etter bokstaver (uten lookbehind)', () => {
+  const fnr = validIds('150390');
+  assert.ok(L.noteLooksSensitive(`nr:${fnr}`));
+  assert.ok(L.noteLooksSensitive(`a${fnr}`));
+  assert.ok(L.noteLooksSensitive(`${fnr} og ${fnr}`));
+});

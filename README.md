@@ -15,18 +15,19 @@ Videreutviklingen er gjort på samme måte som innleveringen: jeg beskrev behov 
 
 ## Funksjoner
 
-- **Vakter på tvers av arbeidsgivere** med ukevisning på en 24-timers stripe, vakter over midnatt, pause og notat. Kopier en vakt til neste dag eller uke, og angre sletting.
+- **Vakter på tvers av arbeidsgivere** med ukevisning på en 24-timers stripe, vakter over midnatt, pause og notat. Kopier en vakt til neste dag eller uke, gjenta faste vakter hver eller annenhver uke, og angre sletting.
 - **Lønnsestimat med ekte tilleggsregler** per arbeidsgiver: så mange tillegg du vil (kveld, natt, lørdag, søndag, helligdager), i kroner per time eller prosent av timelønn, med valgfrie dager og klokkeslett. Kopier tillegg fra en arbeidsgiver til en annen.
 - **Norske helligdager** regnes ut automatisk, inkludert påske og pinse.
 - **Overtid** per dag og/eller per uke, per arbeidsgiver, slik arbeidsmiljøloven regner det.
 - **Feriepenger** (10,2 % eller 12 %) og valgfritt netto-estimat fra skatteprosenten.
 - **Varsler** ved for kort hviletid (11 timer, justerbart), overlappende vakter og når samlet arbeidstid i en uke passerer en grense.
-- **Månedsoversikt** per arbeidsgiver, regneark (CSV for Excel), kalenderfil (.ics) og timeliste til utklippstavlen.
+- **Måneds- og årsoversikt** per arbeidsgiver, med diagram over året. Regneark (CSV for Excel), kalenderfil (.ics), timeliste til utklippstavlen og timeliste som PDF med signaturfelt.
 - **Sjekk mot lønnsslippen:** skriv inn utbetalt brutto og se om det stemmer med estimatet.
 - **Konto og synk i sanntid** mellom mobil og PC, med innlogging via engangskode på e-post. Uten konto fungerer alt lokalt i nettleseren.
 - **Fungerer offline** og kan installeres på hjemskjermen. Endringer gjort uten nett sendes når nettet er tilbake.
 - **Personvern:** last ned alle data, slett alt, slett konto. Appen nekter å lagre fødselsnummer og D-nummer i notater (kontrollsifre sjekkes). Ingen sporing, ingen eksterne fonter.
 - **Eksempeldata:** nye, tilfeldige eksempeldata hver gang, så appen kan prøves uten egne vakter.
+- **Landingsside** for nye besøkende, med «Prøv med eksempeldata» og «Start med egne vakter». Logoen tar deg tilbake til denne uka.
 
 ## Teknikk
 
@@ -42,9 +43,21 @@ Ren HTML, CSS og JavaScript-moduler. Ingen build-steg, så appen ligger rett på
 | `js/config.js` | Supabase-nøkler og kontaktadresse (offentlige verdier, tilgang styres av RLS) |
 | `supabase/schema.sql` | Tabeller, tilganger, Row Level Security, sanntid og sletting av konto |
 | `sw.js` | Service worker for offline-bruk |
-| `tests/` | 36 automatiske tester, kjøres på hver push via GitHub Actions |
+| `tests/` | 39 automatiske tester, kjøres på hver push via GitHub Actions |
 
 Lagring er lokal først: alle endringer lagres i nettleseren med en gang og legges i en utboks. Når brukeren er innlogget og på nett, sendes utboksen til Supabase og serverdata hentes inn. Andre enheter får beskjed i sanntid. Serveren er fasit, unntatt for endringer som ennå ikke er sendt.
+
+## Nettlesere og plattformer
+
+Vaktbok er en nettside som kan installeres som app (PWA). Den virker i nyere versjoner av:
+
+| Plattform | Nettlesere | Installere som app |
+|---|---|---|
+| iPhone og iPad (iOS 15.4 eller nyere) | Safari, og andre nettlesere på iOS | Safari → Del → Legg til på Hjem-skjerm |
+| Android | Chrome, Edge, Samsung Internet, Firefox | Meny → Installer app |
+| Windows, Mac, Linux | Chrome, Edge, Firefox, Safari (Mac) | Chrome og Edge: installer-ikonet i adressefeltet |
+
+Minstekravet kommer av at appen bruker moderne JavaScript (moduler, `dialog`, `structuredClone`, `crypto.randomUUID`), som kom i alle store nettlesere i 2022. Testet automatisk i Chromium. Internet Explorer støttes ikke.
 
 ## Kjøre lokalt
 
@@ -83,7 +96,6 @@ Sendes e-postene fra en Gmail-adresse, kan de havne i søppelpost. Et eget domen
 
 ## Før flere brukere slipper til
 
-- [x] Databehandleravtale (DPA) med Supabase og Brevo
 - [x] Egen SMTP
 - [x] Personvernerklæring (`personvern.html`)
 - [ ] Databehandleravtale (DPA) med Supabase og Brevo

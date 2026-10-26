@@ -225,6 +225,10 @@ function openShift(s = null) {
       start: last?.start || '08:00', end: last?.end || '16:00', brk: last?.breakMin ?? 0, note: '',
     });
   }
+  $('repeatFields').hidden = !!s; // gjentakelse bare for nye vakter
+  $('fRepeat').value = '0';
+  $('repeatUntilLabel').hidden = true;
+  $('fRepeatUntil').value = L.isoDate(addDays(L.parseDate($('fDate').value), 28));
   $('shiftErrors').innerHTML = '';
   updatePreview();
   $('shiftDialog').showModal();
@@ -261,11 +265,25 @@ function saveShift(e) {
   const s = readShiftForm();
   const errs = L.validateShift(s, D().employers);
   if (L.noteLooksSensitive(s.note)) errs.push('Notatet inneholder et fødselsnummer eller D-nummer. Slike opplysninger skal ikke lagres i Vaktbok.');
+  const step = s.id ? 0 : Number($('fRepeat').value);
+  let dates = [s.date];
+  if (step) {
+    const until = $('fRepeatUntil').value;
+    if (!until || until < s.date) errs.push('«Til og med» må være samme dag som vakta eller senere.');
+    else if (L.parseDate(until) - L.parseDate(s.date) > 366 * 86400000) errs.push('Gjentakelse kan gå maks ett år frem.');
+    else dates = L.repeatDates(s.date, until, step, 60);
+  }
   if (errs.length) { $('shiftErrors').innerHTML = errs.map(x => `<li>${esc(x)}</li>`).join(''); return; }
-  const saved = store.upsertShift(s);
+  if (dates.length > 1) {
+    store.addAll({ shifts: dates.map(date => ({ ...s, id: newId(), date })) });
+    toast(`Lagret ${dates.length} vakter`);
+  } else {
+    store.upsertShift(s);
+    toast(s.id ? 'Vakt oppdatert' : 'Vakt lagret');
+  }
   $('shiftDialog').close();
-  ui.weekStart = L.mondayOf(L.parseDate(saved.date));
-  toast(s.id ? 'Vakt oppdatert' : 'Vakt lagret');
+  ui.weekStart = L.mondayOf(L.parseDate(s.date));
+  renderWeek();
 }
 
 // ---------- Arbeidsgivere ----------
@@ -391,6 +409,8 @@ function renderMonth() {
   $('sheetEmp').hidden = ids.length < 2;
   $('csvBtn').disabled = $('sheetBtn').disabled = $('icsBtn').disabled = !ids.length;
   renderPayslips(byEmp, ids);
+  renderYear(y);
+  $('pdfBtn').disabled = !ids.length;
 
   const warns = L.checkRest(D().shifts, D().settings.minRestH);
   const list = L.shiftsInMonth(D().shifts, ui.month).filter(s => warns[s.id]);
@@ -398,6 +418,48 @@ function renderMonth() {
     .filter(w => L.shiftsInMonth(D().shifts, ui.month).some(s => { const k = L.isoWeek(L.parseDate(s.date)); return `${k.year}-U${L.pad(k.week)}` === w.week; }));
   $('warnList').innerHTML = (weeks.map(w => `<div class="flag weekly">Uke ${Number(w.week.slice(-2))}: ${hrs(w.hours)}, over grensen på ${num(D().settings.weekLimitH, 0)} timer.</div>`).join(''))
     + (list.length ? list.map(s => shiftItem(s, warns[s.id], false)).join('') : (weeks.length ? '' : '<p class="muted">Ingen varsler. Alle vakter har nok hvile mellom seg.</p>'));
+}
+
+function renderYear(y) {
+  const { months, byEmp, total } = L.yearSummary(D().shifts, D().employers, y, D().settings);
+  $('yearTitle').textContent = `Hele ${y}`;
+  $('yearTotals').innerHTML = `
+    <div><b>${hrs(total.hours)}</b><span>${total.count} vakter</span></div>
+    <div><b>${kr(total.pay)}</b><span>Estimert brutto</span></div>
+    <div><b>${kr(total.holidayPay)}</b><span>Feriepenger opptjent</span></div>`;
+  const max = Math.max(...months.map(m => m.pay), 1);
+  $('yearChart').innerHTML = months.map((m, i) =>
+    `<div class="col${m.ym === ui.month ? ' now' : ''}" title="${MONTH[i]}: ${hrs(m.hours)}, ${kr(m.pay)}">
+      <div class="bar" style="height:${Math.round(m.pay / max * 100)}%"></div><span class="m">${MONTH[i].slice(0, 1).toUpperCase()}</span></div>`).join('');
+  $('yearChart').setAttribute('role', 'img');
+  $('yearChart').setAttribute('aria-label', months.filter(m => m.count).map((m, i) => `${MONTH[Number(m.ym.slice(5)) - 1]}: ${kr(m.pay)}`).join(', ') || 'Ingen vakter i år');
+  const ids = Object.keys(byEmp);
+  $('yearTable').innerHTML = ids.length ? `<thead><tr><th>Arbeidsgiver</th><th>Vakter</th><th>Timer</th><th>Estimert</th></tr></thead><tbody>`
+    + ids.map(id => { const e = empById(id), o = byEmp[id];
+      return `<tr><td><span class="cell-who"><span class="dot" style="background:${safeColor(e?.color)}"></span>${esc(e?.name || 'Ukjent')}</span></td><td>${o.count}</td><td>${hrs(o.hours)}</td><td>${kr(o.pay)}</td></tr>`; }).join('')
+    + '</tbody>' : '';
+}
+
+function printTimesheet() {
+  const empId = $('sheetEmp').value || Object.keys(L.monthSummary(D().shifts, D().employers, ui.month).byEmp)[0];
+  const emp = empById(empId); if (!emp) return;
+  const all = L.calcAll(D().shifts, D().employers);
+  const list = L.shiftsInMonth(D().shifts, ui.month).filter(s => s.employerId === empId);
+  const [y, m] = ui.month.split('-').map(Number);
+  let sum = 0;
+  const rows = list.map(s => { const c = all.get(s.id); sum += c.hours; const d = L.parseDate(s.date);
+    return `<tr><td>${DAY[d.getDay()]} ${d.getDate()}.${d.getMonth() + 1}.</td><td>${s.start}</td><td>${s.end}</td><td>${s.breakMin || 0} min</td><td>${num(c.hours, 2)}</td></tr>`; }).join('');
+  $('printArea').innerHTML = `
+    <h1>Timeliste</h1>
+    <p><b>Arbeidsgiver:</b> ${esc(emp.name)}<br><b>Periode:</b> ${MONTH[m - 1]} ${y}<br><b>Navn:</b> ______________________________</p>
+    <table><thead><tr><th>Dato</th><th>Start</th><th>Slutt</th><th>Pause</th><th>Timer</th></tr></thead>
+    <tbody>${rows}</tbody><tfoot><tr><td colspan="4"><b>Sum (${list.length} vakter)</b></td><td><b>${num(sum, 2)}</b></td></tr></tfoot></table>
+    <div class="sign"><div>Dato og signatur, arbeidstaker</div><div>Dato og signatur, arbeidsgiver</div></div>
+    <p style="font-size:8pt;color:#555">Laget med Vaktbok. Timer er etter ubetalt pause.</p>`;
+  document.body.classList.add('printing');
+  const done = () => { document.body.classList.remove('printing'); removeEventListener('afterprint', done); };
+  addEventListener('afterprint', done);
+  print();
 }
 
 function renderPayslips(byEmp, ids) {
@@ -497,8 +559,23 @@ function loadDemo() {
 
 // ---------- Hendelser ----------
 
+const WELCOME_KEY = 'vaktbok:welcomed';
+function showLanding(on) {
+  ui.landing = on;
+  document.body.classList.toggle('show-landing', on);
+  $('landing').hidden = !on;
+  if (on) window.scrollTo(0, 0);
+}
+function leaveLanding(tab) {
+  localStorage.setItem(WELCOME_KEY, '1');
+  showLanding(false);
+  if (location.hash === '#om') history.replaceState(null, '', '#uke');
+  setTab(tab);
+}
+
 function render() {
   renderSync(); renderBanners();
+  if (ui.landing) return;
   if (ui.tab === 'uke') renderWeek();
   else if (ui.tab === 'maned') renderMonth();
   else if (ui.tab === 'arbeidsgivere') renderEmployers();
@@ -506,6 +583,10 @@ function render() {
 }
 
 const actions = {
+  'landing-demo': () => { leaveLanding('uke'); loadDemo(); },
+  'landing-start': () => { leaveLanding('arbeidsgivere'); openEmp(); },
+  'landing-login': () => leaveLanding('konto'),
+  'show-landing': () => { showLanding(true); history.replaceState(null, '', '#om'); },
   'edit-shift': el => openShift(D().shifts.find(s => s.id === el.dataset.id)),
   'edit-emp': el => openEmp(empById(el.dataset.id)),
   'new-emp': () => openEmp(),
@@ -550,7 +631,17 @@ document.querySelector('.tabs').addEventListener('keydown', ev => { // ARIA-fane
   const t = tabs[(next + tabs.length) % tabs.length];
   setTab(t.dataset.tab); t.focus();
 });
-$('syncPill').addEventListener('click', () => setTab('konto'));
+$('syncPill').addEventListener('click', () => { if (ui.landing) leaveLanding('konto'); else setTab('konto'); });
+$('homeLink').addEventListener('click', ev => {
+  ev.preventDefault();
+  if (ui.landing) { leaveLanding('uke'); return; }
+  ui.weekStart = L.mondayOf(new Date());
+  ui.month = ym(new Date());
+  setTab('uke');
+  window.scrollTo(0, 0);
+});
+$('fRepeat').addEventListener('change', () => { $('repeatUntilLabel').hidden = $('fRepeat').value === '0'; });
+$('pdfBtn').addEventListener('click', printTimesheet);
 $('prevWeek').addEventListener('click', () => { ui.weekStart = addDays(ui.weekStart, -7); renderWeek(); });
 $('nextWeek').addEventListener('click', () => { ui.weekStart = addDays(ui.weekStart, 7); renderWeek(); });
 $('todayBtn').addEventListener('click', () => { ui.weekStart = L.mondayOf(new Date()); renderWeek(); });
@@ -699,7 +790,13 @@ async function registerSW() {
   } catch (e) { console.warn('Service worker feilet', e); }
 }
 
+const initialHash = location.hash;
 const start = ['uke', 'maned', 'arbeidsgivere', 'konto'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'uke';
 setTab(start);
-store.init().then(render);
+if (initialHash === '#om') showLanding(true);
+store.init().then(() => {
+  // Nye besøkende uten konto og uten data ser landingssiden først.
+  if (!ui.landing && !store.user && !D().employers.length && !localStorage.getItem(WELCOME_KEY) && !initialHash) showLanding(true);
+  render();
+});
 registerSW();

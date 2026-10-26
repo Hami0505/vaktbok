@@ -19,13 +19,43 @@
 <body>
 <div class="wrap">
   <header class="top">
-    <h1>Vaktbok</h1>
+    <h1><a href="#uke" id="homeLink" class="home-link" aria-label="Vaktbok, gå til denne uka">Vaktbok</a></h1>
     <button class="sync" id="syncPill" type="button" data-state="local">
       <span class="sync-dot" aria-hidden="true"></span><span id="syncText">Lagres på denne enheten</span>
     </button>
   </header>
 
   <div id="banners"></div>
+
+  <!-- LANDINGSSIDE for nye besøkende -->
+  <section id="landing" class="landing" hidden aria-labelledby="landingTitle">
+    <div class="landing-hero">
+      <h2 id="landingTitle">Alle vaktene dine, på ett sted.</h2>
+      <p class="lead">For deg som jobber hos flere arbeidsgivere i helse, omsorg og barnevern. Se timer, lønn og hviletid samlet, i stedet for i fem forskjellige timelister.</p>
+      <div class="row">
+        <button class="btn primary big" type="button" data-action="landing-demo">Prøv med eksempeldata</button>
+        <button class="btn big" type="button" data-action="landing-start">Start med egne vakter</button>
+      </div>
+      <p class="small muted">Har du konto? <button class="btn link inline" type="button" data-action="landing-login">Logg inn</button></p>
+    </div>
+
+    <div class="landing-demo" aria-hidden="true">
+      <div class="week">
+        <div class="d">man</div><div class="track"><span class="bar" style="left:31%;width:34%;background:#1F6F6B">Byrå</span></div>
+        <div class="d">tir</div><div class="track"><span class="bar" style="left:62%;width:31%;background:#B3572C">Bolig</span></div>
+        <div class="d">ons</div><div class="track"><span class="bar warn" style="left:31%;width:34%;background:#1F6F6B">Byrå</span></div>
+        <div class="d">tor</div><div class="track"><span class="bar" style="left:92%;width:8%;background:#7A4FB3"></span></div>
+        <div class="d">fre</div><div class="track"><span class="bar" style="left:0;width:36%;background:#7A4FB3">Avlastning</span></div>
+        <div></div><div class="ticks"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
+      </div>
+    </div>
+
+    <ul class="landing-points">
+      <li><b>Riktig lønn med tillegg.</b> Kveld, natt, helg, helligdager og overtid regnes ut fra din egen avtale. Sjekk estimatet mot lønnsslippen.</li>
+      <li><b>Varsel om for kort hviletid.</b> Vaktbok sier fra når det er under 11 timer mellom vaktene, også på tvers av arbeidsgivere.</li>
+      <li><b>På mobil og PC.</b> Fungerer uten nett, og synker mellom enhetene når du logger inn. Uten konto lagres alt bare hos deg.</li>
+    </ul>
+  </section>
 
   <nav aria-label="Hovedmeny">
     <div class="tabs" role="tablist">
@@ -79,7 +109,14 @@
           <button class="btn" id="icsBtn" type="button">Legg i kalenderen (.ics)</button>
           <select id="sheetEmp" class="inline-select" aria-label="Arbeidsgiver for timeliste"></select>
           <button class="btn" id="sheetBtn" type="button">Kopier timeliste</button>
+          <button class="btn" id="pdfBtn" type="button">Timeliste som PDF</button>
         </div>
+      </section>
+      <section class="panel" aria-labelledby="yearTitle">
+        <h2 id="yearTitle"></h2>
+        <div class="totals" id="yearTotals"></div>
+        <div class="yearchart" id="yearChart"></div>
+        <div class="scroll"><table id="yearTable"></table></div>
       </section>
       <section class="panel" aria-labelledby="payslipTitle">
         <h2 id="payslipTitle">Sjekk mot lønnsslippen</h2>
@@ -140,7 +177,7 @@
     </div>
   </main>
   <footer class="foot small muted">
-    <span class="foot-links"><a href="personvern.html">Personvern</a><a id="contactLink" hidden></a></span>
+    <span class="foot-links"><a href="#om" data-action="show-landing">Om Vaktbok</a><a href="personvern.html">Personvern</a><a id="contactLink" hidden></a></span>
     <span>Lønn er et estimat før skatt. Sjekk alltid mot lønnsslippen.</span>
   </footer>
 </div>
@@ -155,6 +192,16 @@
       <label>Start<input type="time" id="fStart" required></label>
       <label>Slutt<input type="time" id="fEnd" required></label>
       <label class="span2">Ubetalt pause (minutter)<input type="number" id="fBreak" min="0" max="600" step="5" value="0" inputmode="numeric"></label>
+      <div class="span2 repeat" id="repeatFields">
+        <label>Gjenta
+          <select id="fRepeat">
+            <option value="0">Ikke gjenta</option>
+            <option value="7">Hver uke</option>
+            <option value="14">Annenhver uke</option>
+          </select>
+        </label>
+        <label id="repeatUntilLabel" hidden>Til og med<input type="date" id="fRepeatUntil"></label>
+      </div>
       <label class="span2">Notat (valgfritt)
         <input type="text" id="fNote" maxlength="200" placeholder="F.eks. avdeling eller vaktkode" aria-describedby="noteHelp">
         <span class="help" id="noteHelp">Ikke skriv navn eller opplysninger om brukere, beboere eller klienter.</span>
@@ -229,5 +276,6 @@
 </dialog>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div id="printArea" class="print-area" aria-hidden="true"></div>
 </body>
 </html>

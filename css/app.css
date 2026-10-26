@@ -178,9 +178,9 @@ th { font-weight: 500; color: var(--muted); }
 td .sub { display: block; color: var(--muted); font-size: .8rem; font-weight: 400; }
 @media (max-width: 560px) {
   table { min-width: 0; }
-  th:nth-child(2), td:nth-child(2), th:nth-child(5), td:nth-child(5) { display: none; }
+  #empTable th:nth-child(2), #empTable td:nth-child(2), #empTable th:nth-child(5), #empTable td:nth-child(5) { display: none; }
 }
-@media (max-width: 420px) { th:nth-child(4), td:nth-child(4) { display: none; } }
+@media (max-width: 420px) { #empTable th:nth-child(4), #empTable td:nth-child(4), #yearTable th:nth-child(2), #yearTable td:nth-child(2) { display: none; } }
 tfoot td { font-weight: 700; border-bottom: 0; }
 
 /* Dialoger */
@@ -249,3 +249,41 @@ dialog .grid.three { grid-template-columns: repeat(3, 1fr); }
 .slip input { text-align: right; }
 
 .foot-links { display: flex; gap: 16px; }
+
+/* Klikkbar logo */
+.home-link { color: inherit; text-decoration: none; border-radius: 6px; }
+.home-link:hover { color: var(--accent); }
+
+/* Landingsside */
+.landing { margin: 20px 0 32px; }
+.landing-hero h2 { font-size: clamp(2rem, 6vw, 3.2rem); font-weight: 800; letter-spacing: -.035em; line-height: 1.05; margin: 0 0 14px; max-width: 16ch; }
+.landing-hero .lead { font-size: 1.1rem; color: var(--muted); max-width: 52ch; margin: 0 0 8px; }
+.landing-demo { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; margin: 28px 0; }
+.landing-demo .bar { cursor: default; display: block; }
+.landing-points { list-style: none; padding: 0; margin: 0; display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.landing-points li { border-left: 3px solid var(--accent); padding-left: 12px; color: var(--muted); }
+.landing-points b { display: block; color: var(--ink); margin-bottom: 2px; }
+.btn.link.inline { padding: 0; font-size: inherit; color: var(--accent); }
+body.show-landing .tabs, body.show-landing main, body.show-landing #banners { display: none; }
+
+/* Gjenta vakt */
+.repeat { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* Årsoversikt */
+.yearchart { display: grid; grid-template-columns: repeat(12, 1fr); gap: 6px; align-items: end; height: 150px; margin: 8px 0 18px; }
+.yearchart .col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 4px; }
+.yearchart .bar { width: 100%; max-width: 36px; background: var(--accent); border-radius: 4px 4px 0 0; min-height: 2px; }
+.yearchart .col.now .bar { background: var(--ink); }
+.yearchart .m { font-size: .72rem; color: var(--muted); }
+
+/* Utskrift av timeliste */
+.print-area { display: none; }
+@media print {
+  body.printing .wrap, body.printing dialog, body.printing .toast { display: none !important; }
+  body.printing .print-area { display: block; color: #000; font-size: 11pt; }
+  .print-area h1 { font-size: 18pt; margin: 0 0 4pt; }
+  .print-area table { width: 100%; min-width: 0; border-collapse: collapse; margin: 12pt 0; }
+  .print-area th, .print-area td { border-bottom: 1px solid #999; padding: 4pt; color: #000; font-size: 10pt; }
+  .print-area .sign { display: grid; grid-template-columns: 1fr 1fr; gap: 32pt; margin-top: 40pt; }
+  .print-area .sign div { border-top: 1px solid #000; padding-top: 4pt; font-size: 9pt; }
+}
