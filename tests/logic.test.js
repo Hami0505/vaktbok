@@ -232,3 +232,20 @@ test('validering av overtid', () => {
   assert.ok(L.validateEmployer({ ...emp2, overtime: { afterH: null, weekH: null, pct: 40 } }).length);
   assert.ok(L.validateEmployer({ ...emp2, overtime: { afterH: 9, pct: 500 } }).length);
 });
+
+test('eksempeldata er tilfeldige, gyldige og uten overlapp', async () => {
+  const { makeDemo } = await import('../js/demo.js');
+  const seeded = seed => () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+  let i = 0; const id = () => `id-${++i}`;
+  const runs = [1, 2, 3, 42, 99].map(n => makeDemo({ rand: seeded(n), newId: id, today: new Date(2026, 9, 26) }));
+  for (const { employers, shifts } of runs) {
+    assert.ok(employers.length >= 2 && employers.length <= 3);
+    for (const e of employers) assert.deepEqual(L.validateEmployer(e), []);
+    for (const s of shifts) assert.deepEqual(L.validateShift(s, employers), []);
+    const w = L.checkRest(shifts, 11);
+    assert.ok(!Object.values(w).some(x => x.type === 'overlap'), 'ingen overlapp');
+    assert.ok(shifts.some(s => s.date >= '2026-10-26' && s.date <= '2026-11-01'), 'minst én vakt denne uka');
+  }
+  const sig = r => r.employers.map(e => e.name + e.rate).join() + r.shifts.length;
+  assert.ok(new Set(runs.map(sig)).size > 1, 'ulike data hver gang');
+});

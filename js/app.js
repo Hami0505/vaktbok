@@ -2,6 +2,7 @@
 import { config } from './config.js';
 import * as L from './logic.js';
 import { Store, newId } from './store.js';
+import { makeDemo } from './demo.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -452,7 +453,8 @@ function renderAccount() {
     ? 'Dataene dine lagres på server i EU og synkes til enhetene der du er logget inn. Du kan laste ned eller slette alt når som helst.'
     : 'Alt lagres i denne nettleseren. Sletter du nettleserdata, forsvinner vaktene. Last ned en kopi jevnlig.';
   $('deleteAccountBtn').hidden = !store.user;
-  $('demoBtn').hidden = !!store.user || D().shifts.length > 0;
+  $('demoBtn').hidden = !!store.user || !onlyDemo();
+  $('demoBtn').textContent = D().employers.length ? 'Lag nye eksempeldata' : 'Prøv med eksempeldata';
 }
 
 // ---------- Import og eksempeldata ----------
@@ -477,20 +479,19 @@ async function importData(data, label) {
   return true;
 }
 
+const DEMO_KEY = 'vaktbok:demo';
+const demoIds = () => { try { return JSON.parse(localStorage.getItem(DEMO_KEY) || '[]'); } catch { return []; } };
+// Eksempeldata kan lages på nytt så lenge alt som finnes, er eksempeldata.
+const onlyDemo = () => { const ids = new Set(demoIds()); return D().employers.every(e => ids.has(e.id)); };
+
 function loadDemo() {
-  const a = { id: newId(), name: 'Bemanningsbyrå', color: '#1F6F6B', rate: 285, archived: false, overtime: { afterH: 9, weekH: 40, pct: 40 },
-    rules: [newRule({ label: 'Kveld', value: 56, from: '17:00', to: '21:00' }), newRule({ label: 'Natt', value: 70, days: [0, 1, 2, 3, 4, 5, 6], from: '21:00', to: '06:00' }),
-      newRule({ label: 'Helg', value: 60, days: [6, 0], from: '00:00', to: '00:00' }), newRule({ label: 'Helligdag', kind: 'pct', value: 100, holiday: true, from: '00:00', to: '00:00', days: [] })] };
-  const b = { id: newId(), name: 'Bofellesskap', color: '#B3572C', rate: 262, archived: false, overtime: null,
-    rules: [newRule({ label: 'Helg', value: 55, days: [6, 0], from: '00:00', to: '00:00' })] };
-  const ws = L.mondayOf(new Date()), d = n => L.isoDate(addDays(ws, n));
-  const shifts = [
-    [a, -6, '15:00', '22:30', 30], [b, -4, '08:00', '15:30', 30], [a, -2, '22:00', '07:30', 0],
-    [a, 0, '08:00', '16:00', 30], [b, 1, '15:00', '22:00', 30], [a, 2, '07:30', '15:30', 30],
-    [a, 3, '22:00', '07:30', 0], [b, 5, '09:00', '21:00', 45],
-  ].map(([e, n, start, end, brk]) => ({ id: newId(), employerId: e.id, date: d(n), start, end, breakMin: brk, note: '' }));
-  store.addAll({ employers: [a, b], shifts });
-  toast('Eksempeldata lagt inn');
+  const old = new Set(demoIds());
+  for (const e of D().employers.filter(e => old.has(e.id))) store.deleteEmployer(e.id);
+  const { employers, shifts } = makeDemo({ newId });
+  store.addAll({ employers, shifts });
+  localStorage.setItem(DEMO_KEY, JSON.stringify(employers.map(e => e.id)));
+  toast(old.size ? 'Nye eksempeldata laget' : 'Eksempeldata lagt inn');
+  ui.weekStart = L.mondayOf(new Date());
   setTab('uke');
 }
 
