@@ -366,3 +366,4 @@ input[type="radio"] { width: 20px; min-height: 20px; height: 20px; margin: 0; ac
 .fixedpay summary { cursor: pointer; font-size: .875rem; font-weight: 500; color: var(--muted); }
 .fixedpay label { margin-top: 8px; }
 .kind-tag { font-size: .75rem; font-weight: 500; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; margin-left: 6px; }
+.hello { font-size: 1.4rem; font-weight: 700; letter-spacing: -.01em; margin: 0 0 2px; }

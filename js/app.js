@@ -744,7 +744,8 @@ function renderAccount() {
   } else {
     const n = store.pending;
     p.innerHTML = `<h2>Konto</h2>
-      <p>${store.profile?.display_name ? `Hei, <b>${esc(store.profile.display_name)}</b>. ` : ''}Logget inn som <b>${esc(store.user.email)}</b></p>
+      ${store.profile?.display_name ? `<p class="hello">Hei, ${esc(store.profile.display_name)}</p>` : ''}
+      <p>Du er logget inn med <b>${esc(store.user.email)}</b></p>
       ${store.missingCols?.size ? `<p class="flag block rest">Databasen mangler ${[...store.missingCols].map(c => ({ series_id: 'gjentakende vakter', fee: 'beløp per vakt', pay: 'honorar og frivillig' })[c]).join(' og ')}. Vaktene lagres, men dette synkes ikke mellom enheter før du kjører oppdatert SQL fra README i Supabase.</p>` : ''}
       <p class="small muted">${n ? `${n} ${n === 1 ? 'endring' : 'endringer'} venter på å bli synket.` : 'Alle endringer er synket.'}${store.lastError ? ` ${esc(friendlyError(store.lastError))}${contact ? ` Vedvarer feilen, kontakt <a href="mailto:${esc(contact)}">${esc(contact)}</a>.` : ''}` : ''}</p>
       ${store.noProfiles ? '<p class="flag block rest">Databasen mangler tabellen for navn og aktivitet. Kjør oppdatert SQL fra README i Supabase.</p>' : ''}
