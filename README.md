@@ -83,6 +83,7 @@ Sendes e-postene fra en Gmail-adresse, kan de havne i søppelpost. Et eget domen
 
 ## Før flere brukere slipper til
 
+- [x] Databehandleravtale (DPA) med Supabase og Brevo
 - [x] Egen SMTP
 - [x] Personvernerklæring (`personvern.html`)
 - [ ] Databehandleravtale (DPA) med Supabase og Brevo
