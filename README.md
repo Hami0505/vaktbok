@@ -20,6 +20,7 @@ Videreutviklingen er gjort på samme måte som innleveringen: jeg beskrev behov 
 - **Lønnsestimat med ekte tilleggsregler** per arbeidsgiver: så mange tillegg du vil (kveld, natt, lørdag, søndag, helligdager), i kroner per time eller prosent av timelønn, med valgfrie dager og klokkeslett. Kopier tillegg fra en arbeidsgiver til en annen.
 - **Norske helligdager** regnes ut automatisk, inkludert påske og pinse.
 - **Overtid** per dag og/eller per uke, per arbeidsgiver, slik arbeidsmiljøloven regner det.
+- **Timelønn, honorar eller frivillig** per arbeidsgiver. Honorar føres per oppdrag med et vanlig beløp som forslag, og viser hva det tilsvarer per time. Enhver vakt kan også få et avtalt fast beløp. Frivillig arbeid føres uten lønn, og kan holdes utenfor varsler om hviletid.
 - **Feriepenger** (10,2 % eller 12 %), og valg mellom brutto og netto i oversiktene (netto regnes fra skatteprosenten din).
 - **Varsler** ved for kort hviletid (11 timer, justerbart), overlappende vakter og når samlet arbeidstid i en uke passerer en grense.
 - **Oversikt** over måned og år per arbeidsgiver, med diagram over året. Hold over eller trykk på en måned for å se tallene og åpne den. Regneark (CSV for Excel), kalenderfil (.ics), timeliste til utklippstavlen og timeliste som PDF med signaturfelt.
@@ -47,7 +48,7 @@ Ren HTML, CSS og JavaScript-moduler. Ingen build-steg, så appen ligger rett på
 | `js/config.js` | Supabase-nøkler og kontaktadresse (offentlige verdier, tilgang styres av RLS) |
 | `supabase/schema.sql` | Tabeller, tilganger, Row Level Security, sanntid og sletting av konto |
 | `sw.js` | Service worker for offline-bruk |
-| `tests/` | 49 automatiske tester, kjøres på hver push via GitHub Actions |
+| `tests/` | 54 automatiske tester, kjøres på hver push via GitHub Actions |
 
 Lagring er lokal først: alle endringer lagres i nettleseren med en gang og legges i en utboks. Når brukeren er innlogget og på nett, sendes utboksen til Supabase og serverdata hentes inn. Andre enheter får beskjed i sanntid. Serveren er fasit, unntatt for endringer som ennå ikke er sendt.
 

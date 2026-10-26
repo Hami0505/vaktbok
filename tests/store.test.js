@@ -120,3 +120,24 @@ test('kalenderlenke: krever innlogging og gir forståelige feilkoder', async () 
   s2.sb = reply(null, { message: 'Function not found', context: { status: 404, json: async () => { throw new Error(); } } });
   await assert.rejects(() => s2.fetchCalendar('https://a.no'), /no-function/);
 });
+
+test('synk virker også når databasen mangler nye kolonner (fee, series_id, pay)', async () => {
+  const s3 = new Store({ supabaseUrl: 'x', supabaseAnonKey: 'y' });
+  s3.user = { id: 'u1' };
+  const saved = { employers: [], shifts: [] };
+  const missing = new Set(['fee', 'series_id', 'pay']);
+  s3.sb = { from: table => ({
+    upsert: async rows => {
+      for (const r of rows) for (const c of Object.keys(r)) if (missing.has(c)) return { error: { code: 'PGRST204', message: `Could not find the '${c}' column of '${table}' in the schema cache` } };
+      saved[table].push(...rows); return { error: null };
+    },
+    select: () => ({ order: () => ({ range: async () => ({ data: saved[table], error: null }) }), maybeSingle: async () => ({ data: null, error: null }) }),
+  }) };
+  const e = s3.upsertEmployer({ name: 'Foredrag', rate: 0, color: '#112233', rules: [], pay: { type: 'fee', feeDefault: 1000 } });
+  s3.upsertShift({ employerId: e.id, date: '2026-11-03', start: '18:00', end: '20:00', breakMin: 0, note: '', fee: 1500, seriesId: 'abc' });
+  await new Promise(r => setTimeout(r, 20)); s3.syncing = false; await s3.sync();
+  assert.equal(s3.pending, 0, 'utboksen tømmes');
+  assert.deepEqual([...s3.missingCols].sort(), ['fee', 'pay', 'series_id']);
+  assert.equal(saved.shifts.length, 1);
+  assert.ok(!('fee' in saved.shifts[0]) && !('series_id' in saved.shifts[0]));
+});

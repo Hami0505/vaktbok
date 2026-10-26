@@ -358,3 +358,11 @@ body.show-landing .tabs, body.show-landing main, body.show-landing #banners { di
 input[type="radio"] { width: 20px; min-height: 20px; height: 20px; margin: 0; accent-color: var(--accent); flex: none; }
 .repeat-end label.check { display: flex; flex-direction: row; align-items: center; gap: 8px; flex-wrap: wrap; }
 .repeat-end input[type=date] { min-width: 150px; }
+
+/* Lønnsform */
+.paytype { margin: 0; }
+.paytype .seg { margin: 4px 0 6px; }
+.paytype .help { margin: 0; }
+.fixedpay summary { cursor: pointer; font-size: .875rem; font-weight: 500; color: var(--muted); }
+.fixedpay label { margin-top: 8px; }
+.kind-tag { font-size: .75rem; font-weight: 500; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; margin-left: 6px; }

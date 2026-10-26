@@ -415,3 +415,51 @@ test('serier: beskrivelse og validering', () => {
   assert.ok(L.validateRepeat({ freq: 'day', interval: 1, end: { type: 'until', until: '2026-11-01' } }, '2026-11-03').length, 'slutt før start');
   assert.ok(L.validateRepeat({ freq: 'day', interval: 1, end: { type: 'count', count: 0 } }, '2026-11-03').length, 'antall 0');
 });
+
+test('honorar, fast beløp og frivillig', () => {
+  const fee = { id: 'f', name: 'Foredrag', rate: 0, rules: [], pay: { type: 'fee', feeDefault: 1000 } };
+  const vol = { id: 'v', name: 'Frivillig', rate: 0, rules: [], pay: { type: 'volunteer', inWarnings: false } };
+  const a = L.calcShift(S({ employerId: 'f', date: '2026-11-03', start: '18:00', end: '20:00' }), fee);
+  close(a.pay, 1000, 'standardhonorar'); close(a.effectiveRate, 500, 'tilsvarer kr/t'); close(a.holidayBase, 0, 'honorar uten feriepenger');
+  const b = L.calcShift(S({ employerId: 'f', date: '2026-11-03', start: '18:00', end: '21:00', fee: 1500 }), fee);
+  close(b.pay, 1500, 'eget beløp for oppdraget');
+  const c = L.calcShift(S({ date: '2026-11-03', start: '18:00', end: '20:00', fee: 3000 }), emp);
+  close(c.pay, 3000, 'fast pris overstyrer timelønn og tillegg'); close(c.holidayBase, 3000, 'følger arbeidsgiverens feriepenger');
+  const d = L.calcShift(S({ employerId: 'v', date: '2026-11-03', start: '18:00', end: '20:00' }), vol);
+  close(d.pay, 0, 'frivillig'); close(d.hours, 2, 'timer føres');
+  const withHp = { ...fee, pay: { ...fee.pay, holidayPay: true } };
+  close(L.calcShift(S({ employerId: 'f', date: '2026-11-03', start: '18:00', end: '20:00' }), withHp).holidayBase, 1000, 'honorar med feriepenger');
+});
+
+test('feriepenger og fordeling per lønnsform i månedsoppsummering', () => {
+  const fee = { id: 'f', name: 'Foredrag', rate: 0, rules: [], pay: { type: 'fee', feeDefault: 1000 } };
+  const vol = { id: 'v', name: 'Frivillig', rate: 0, rules: [], pay: { type: 'volunteer' } };
+  const shifts = [
+    S({ date: '2026-11-02', start: '08:00', end: '16:00' }),
+    S({ employerId: 'f', date: '2026-11-03', start: '18:00', end: '20:00' }),
+    S({ employerId: 'v', date: '2026-11-04', start: '18:00', end: '21:00' }),
+  ];
+  const m = L.monthSummary(shifts, [emp, fee, vol], '2026-11', { holidayPayPct: 10 });
+  close(m.total.pay, 1600 + 1000, 'brutto');
+  close(m.total.holidayPay, 160, 'feriepenger bare av timelønn');
+  close(m.total.byKind.fee.pay, 1000, 'honorar'); close(m.total.byKind.volunteer.hours, 3, 'frivillige timer');
+  assert.equal(m.byEmp.v.kind, 'volunteer');
+});
+
+test('frivillig kan holdes utenfor hviletid og ukegrense, men overlapp vises alltid', () => {
+  const vol = { id: 'v', name: 'Frivillig', rate: 0, rules: [], pay: { type: 'volunteer', inWarnings: false } };
+  const a = S({ id: 'a', employerId: 'v', date: '2026-11-03', start: '18:00', end: '23:00' });
+  const b = S({ id: 'b', date: '2026-11-04', start: '06:00', end: '14:00' });
+  const c = S({ id: 'c', date: '2026-11-03', start: '22:00', end: '23:30' });
+  const w = L.restWarnings([a, b], [emp, vol], 11);
+  assert.deepEqual(w, {}, 'ingen hviletidsvarsel');
+  assert.equal(L.restWarnings([a, c], [emp, vol], 11).c.type, 'overlap');
+  const many = [3, 4, 5, 6, 7, 8].map(d => S({ employerId: 'v', date: `2026-11-0${d}`, start: '06:00', end: '16:00' }));
+  assert.deepEqual(L.weeklyOverLimit(many, [vol], 48), []);
+});
+
+test('validering av beløp og lønnsform', () => {
+  assert.ok(L.validateShift(S({ date: '2026-11-03', start: '08:00', end: '09:00', fee: -5 }), [emp]).length);
+  assert.deepEqual(L.validateEmployer({ name: 'Frivillig', rate: NaN, rules: [], pay: { type: 'volunteer' } }), []);
+  assert.ok(L.validateEmployer({ name: 'Foredrag', rate: 0, rules: [], pay: { type: 'fee', feeDefault: -1 } }).length);
+});

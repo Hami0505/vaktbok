@@ -108,6 +108,7 @@
         </div>
         <p class="help" id="netHelp" hidden>Legg inn skattetrekket ditt under <button class="btn link inline" type="button" data-action="go-settings">Konto → Innstillinger</button> for å se netto.</p>
         <div class="totals" id="totals"></div>
+        <p class="small muted" id="kindSplit"></p>
         <div class="scroll"><table id="empTable"></table></div>
         <p class="small muted">Estimat før skatt. Tillegg, overtid og feriepenger regnes etter reglene du har lagt inn per arbeidsgiver. Sjekk alltid mot lønnsslippen.</p>
         <div class="row">
@@ -200,6 +201,15 @@
       <label class="span2">Dato<input type="date" id="fDate" required></label>
       <label>Start<input type="time" id="fStart" required></label>
       <label>Slutt<input type="time" id="fEnd" required></label>
+      <label class="span2" id="fFeeL">Honorar for oppdraget (kr)
+        <input type="number" id="fFee" min="0" step="1" inputmode="decimal">
+        <span class="help" id="fFeeHelp"></span>
+      </label>
+      <details class="span2 fixedpay" id="fFixedBox">
+        <summary>Fast beløp for denne vakta (valgfritt)</summary>
+        <label>Beløp (kr)<input type="number" id="fFixed" min="0" step="1" inputmode="decimal" placeholder="F.eks. 3000"></label>
+        <span class="help">Fyll inn hvis vakta betales med et avtalt beløp i stedet for timelønn og tillegg.</span>
+      </details>
       <label class="span2">Ubetalt pause (minutter)<input type="number" id="fBreak" min="0" max="600" step="5" value="0" inputmode="numeric"></label>
       <div class="span2 repeat" id="repeatFields">
         <label>Gjenta<select id="fRepeat"></select></label>
@@ -241,11 +251,23 @@
     <h2 id="empDialogTitle">Ny arbeidsgiver</h2>
     <div class="grid">
       <label class="span2">Navn<input type="text" id="eName" maxlength="60" required placeholder="F.eks. Flexibemanning"></label>
-      <label>Timelønn (kr)<input type="number" id="eRate" min="0" step="0.01" required inputmode="decimal"></label>
+      <fieldset class="span2 paytype">
+        <legend>Lønnsform</legend>
+        <div class="seg" role="radiogroup" aria-label="Lønnsform">
+          <button type="button" role="radio" data-paytype="hourly" aria-checked="true">Timelønn</button>
+          <button type="button" role="radio" data-paytype="fee" aria-checked="false">Honorar</button>
+          <button type="button" role="radio" data-paytype="volunteer" aria-checked="false">Frivillig</button>
+        </div>
+        <p class="help" id="payHelp"></p>
+      </fieldset>
+      <label id="eRateL">Timelønn (kr)<input type="number" id="eRate" min="0" step="0.01" required inputmode="decimal"></label>
+      <label id="eFeeL" hidden>Vanlig honorar per oppdrag (kr, valgfritt)<input type="number" id="eFee" min="0" step="1" inputmode="decimal" placeholder="F.eks. 1000"></label>
       <label>Farge<input type="color" id="eColor" value="#1F6F6B"></label>
+      <label class="check span2" id="eHolidayL" hidden><input type="checkbox" id="eHoliday"> Gir feriepenger</label>
+      <label class="check span2" id="eWarnL" hidden><input type="checkbox" id="eWarn" checked> Ta med i varsler om hviletid og ukegrense</label>
     </div>
 
-    <fieldset>
+    <fieldset id="rulesBox">
       <legend>Tillegg</legend>
       <p class="help">Legg inn tilleggene fra arbeidsavtalen eller tariffen din. Flere tillegg kan gjelde samtidig, for eksempel kveld og helg.</p>
       <div id="ruleList"></div>
@@ -256,7 +278,7 @@
       </div>
     </fieldset>
 
-    <fieldset>
+    <fieldset id="otBox">
       <legend>Overtid</legend>
       <label class="check"><input type="checkbox" id="eOtOn"> Beregn overtid</label>
       <div class="grid three" id="otFields">

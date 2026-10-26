@@ -167,7 +167,7 @@ function renderWeek() {
   $('weekTitle').innerHTML = `Uke ${week}<span class="range">${esc(range)}</span>`;
   $('todayBtn').hidden = L.isoDate(L.mondayOf(new Date())) === L.isoDate(ws);
 
-  const warns = L.checkRest(D().shifts, D().settings.minRestH);
+  const warns = L.restWarnings(D().shifts, D().employers, D().settings.minRestH);
   ui.calc = L.calcAll(D().shifts, D().employers);
   const from = L.isoDate(addDays(ws, -1)), to = L.isoDate(we);
   const near = D().shifts.filter(s => s.date >= from && s.date <= to);
@@ -211,7 +211,7 @@ function shiftItem(s, warn, actions) {
       <span class="who"><span class="dot" style="background:${safeColor(emp?.color)}"></span>${esc(emp ? emp.name : 'Ukjent')}${s.seriesId ? '<span class="series-mark" title="Gjentakende vakt" aria-label="gjentakende"> ↻</span>' : ''}</span>
       <span class="num">${hrs(c.hours)}</span>
       <span class="meta">${fmtDay(s.date)} ${s.start}–${s.end}${s.breakMin ? `, pause ${s.breakMin} min` : ''}${s.note ? `, ${esc(s.note)}` : ''}</span>
-      <span class="meta num">${kr(shown(c.pay))}${c.overtimeH > 0 ? `, ${hrs(c.overtimeH)} overtid` : ''}</span>
+      <span class="meta num">${c.kind === 'volunteer' && !c.pay ? 'Frivillig' : kr(shown(c.pay))}${c.overtimeH > 0 ? `, ${hrs(c.overtimeH)} overtid` : ''}</span>
     </button>
     ${warn ? `<div class="flag ${warn.type}">${esc(warningText(warn))}</div>` : ''}
     ${actions ? `<div class="acts"><button class="btn link" data-action="copy-shift" data-id="${s.id}" data-days="1">Kopier til neste dag</button><button class="btn link" data-action="copy-shift" data-id="${s.id}" data-days="7">Kopier til neste uke</button></div>` : ''}
@@ -224,7 +224,29 @@ function readShiftForm() {
   return {
     id: ui.shift?.id, employerId: $('fEmp').value, date: $('fDate').value, start: $('fStart').value, end: $('fEnd').value,
     breakMin: Number($('fBreak').value || 0), note: $('fNote').value.trim(), seriesId: ui.shift?.seriesId || null,
+    fee: shiftFeeFromForm(),
   };
+}
+
+// Beløp for vakta: honorar for oppdraget (honorar-arbeidsgivere) eller valgfritt fast beløp (timelønn).
+function shiftFeeFromForm() {
+  const type = L.payType(empById($('fEmp').value));
+  const v = type === 'fee' ? $('fFee').value : type === 'hourly' ? $('fFixed').value : '';
+  return v === '' ? null : Number(v);
+}
+
+function togglePayFields(shift = null, fresh = false) {
+  const emp = empById($('fEmp').value), type = L.payType(emp);
+  $('fFeeL').hidden = type !== 'fee';
+  $('fFixedBox').hidden = type !== 'hourly';
+  if (type === 'fee') {
+    if (fresh) $('fFee').value = shift && L.hasFixedFee(shift) ? shift.fee : (emp.pay?.feeDefault ?? '');
+    $('fFeeHelp').textContent = emp.pay?.feeDefault ? `Vanlig honorar hos ${emp.name} er ${kr(emp.pay.feeDefault)}. Endre det hvis dette oppdraget betales annerledes.` : 'Beløpet du får for dette oppdraget.';
+  }
+  if (type === 'hourly' && fresh) {
+    $('fFixed').value = shift && L.hasFixedFee(shift) ? shift.fee : '';
+    $('fFixedBox').open = !!(shift && L.hasFixedFee(shift));
+  }
 }
 
 // ---------- Gjentakende vakter (serier) ----------
@@ -302,7 +324,7 @@ function choiceBox(title, text, options) {
 function createSeries(s, rule) {
   const seriesId = newId();
   const dates = L.seriesDates(rule, s.date, s.date, horizonIso(), 1000);
-  const template = { employerId: s.employerId, start: s.start, end: s.end, breakMin: s.breakMin, note: s.note };
+  const template = { employerId: s.employerId, start: s.start, end: s.end, breakMin: s.breakMin, note: s.note, fee: s.fee ?? null };
   const through = [horizonIso(), rule.end.type === 'until' ? rule.end.until : null].filter(Boolean).sort()[0];
   store.addAll({ shifts: dates.map(date => ({ ...template, id: seriesShiftId(seriesId, date), date, seriesId })) });
   store.updateSettings({ series: { ...(D().settings.series || {}), [seriesId]: { rule, start: s.date, template, through } } });
@@ -333,7 +355,7 @@ function extendSeries() {
 function applySeriesEdit(orig, edited, scope) {
   if (scope === 'one') { store.upsertShift({ ...edited, seriesId: null }); return 'Vakta er endret og tatt ut av serien'; }
   const delta = Math.round((L.parseDate(edited.date) - L.parseDate(orig.date)) / 86400000);
-  const patch = { employerId: edited.employerId, start: edited.start, end: edited.end, breakMin: edited.breakMin, note: edited.note };
+  const patch = { employerId: edited.employerId, start: edited.start, end: edited.end, breakMin: edited.breakMin, note: edited.note, fee: edited.fee ?? null };
   const targets = D().shifts.filter(x => x.seriesId === orig.seriesId && (scope === 'all' || x.date >= orig.date));
   store.addAll({ shifts: targets.map(x => ({ ...x, ...patch, date: delta ? L.isoDate(addDays(L.parseDate(x.date), delta)) : x.date })) });
   const sr = seriesOf(orig.seriesId);
@@ -363,6 +385,7 @@ function openShift(s = null) {
       start: last?.start || '08:00', end: last?.end || '16:00', brk: last?.breakMin ?? 0, note: '',
     });
   }
+  togglePayFields(s, true);
   $('repeatFields').hidden = !!s; // gjentakelse velges når vakta lages
   if (!s) {
     $('fRepeat').innerHTML = ''; fillRepeatOptions(); $('fRepeat').value = 'none';
@@ -395,11 +418,14 @@ function updatePreview() {
   const tmpId = s.id || '__ny__';
   const others = D().shifts.filter(x => x.id !== s.id);
   const c = L.calcAll([...others, { ...s, id: tmpId }], D().employers).get(tmpId);
-  const lines = [`<b>${hrs(c.hours)}</b>, estimert <b>${kr(c.pay)}</b>`];
+  const lines = [c.kind === 'volunteer' && !L.hasFixedFee(s) ? `<b>${hrs(c.hours)}</b> frivillig arbeid`
+    : c.fixed ? `<b>${hrs(c.hours)}</b>, <b>${kr(c.pay)}</b>${c.effectiveRate ? ` (tilsvarer ${kr(c.effectiveRate)} per time)` : ''}`
+    : `<b>${hrs(c.hours)}</b>, estimert <b>${kr(c.pay)}</b>`];
+  if (c.kind === 'fee' && !c.pay) lines.push('<span class="flag block rest">Skriv inn honoraret for oppdraget.</span>');
   for (const x of c.supplements) if (x.hours > 0) lines.push(`${esc(x.label)}: ${hrs(x.hours)}, ${kr(x.amount)}`);
   if (c.overtimeH > 0) lines.push(`Overtid: ${hrs(c.overtimeH)}, ${kr(c.overtimePay)}${c.weekOvertimeH ? ` (${hrs(c.weekOvertimeH)} fordi uka passerer grensen)` : ''}`);
   const hol = L.holidayName(s.date); if (hol) lines.push(`${esc(hol)}`);
-  const w = L.checkRest([...others, { ...s, id: tmpId }], D().settings.minRestH)[tmpId];
+  const w = L.restWarnings([...others, { ...s, id: tmpId }], D().employers, D().settings.minRestH)[tmpId];
   if (w) lines.push(`<span class="flag block ${w.type}">${esc(warningText(w))}</span>`);
   if (L.noteLooksSensitive(s.note)) lines.push(`<span class="flag block overlap">Notatet inneholder det som ser ut som et fødselsnummer eller D-nummer. Fjern det før du lagrer.</span>`);
   $('preview').innerHTML = lines.join('<br>');
@@ -421,7 +447,7 @@ async function saveShift(e) {
     msg = `Lagret ${n} ${n === 1 ? 'vakt' : 'vakter'}. ${L.describeRepeat(rule)}`;
   } else if (s.id && s.seriesId && seriesOf(s.seriesId)) {
     const o = ui.shift;
-    const changed = ['employerId', 'date', 'start', 'end', 'breakMin', 'note'].some(k => String(o[k] ?? '') !== String(s[k] ?? ''));
+    const changed = ['employerId', 'date', 'start', 'end', 'breakMin', 'note', 'fee'].some(k => String(o[k] ?? '') !== String(s[k] ?? ''));
     if (!changed) { $('shiftDialog').close(); return; }
     const scope = await choiceBox('Endre gjentakende vakt', 'Hvilke vakter skal endringen gjelde?',
       [['one', 'Bare denne vakta'], ['future', 'Denne og alle senere'], ['all', 'Alle vaktene i serien']]);
@@ -439,6 +465,9 @@ async function saveShift(e) {
 
 // ---------- Arbeidsgivere ----------
 
+const payLabel = e => L.payType(e) === 'fee' ? (e.pay?.feeDefault ? `${kr(e.pay.feeDefault)}/oppdrag` : 'Honorar')
+  : L.payType(e) === 'volunteer' ? 'Frivillig' : `${num(e.rate, 0)} kr/t`;
+
 function renderEmployers() {
   const emps = [...D().employers].sort((a, b) => (a.archived - b.archived) || a.name.localeCompare(b.name, 'nb'));
   if (!emps.length) {
@@ -454,8 +483,8 @@ function renderEmployers() {
     }
     return `<div class="item"><button class="open" data-action="edit-emp" data-id="${e.id}" aria-label="Endre ${esc(e.name)}">
       <span class="who"><span class="dot" style="background:${safeColor(e.color)}"></span>${esc(e.name)}${e.archived ? ' <span class="small muted">(skjult)</span>' : ''}</span>
-      <span class="num">${num(e.rate, 0)} kr/t</span>
-      <span class="meta">${rules.length ? rules.map(esc).join('<br>') : 'Ingen tillegg'}${!(Number(e.rate) > 0) ? '<br><span class="flag missing">Mangler timelønn, trykk for å legge inn</span>' : ''}</span>
+      <span class="num">${payLabel(e)}</span>
+      <span class="meta">${L.payType(e) === 'hourly' ? (rules.length ? rules.map(esc).join('<br>') : 'Ingen tillegg') : esc(L.payType(e) === 'fee' ? `Honorar per oppdrag${L.givesHolidayPay(e) ? ', gir feriepenger' : ''}` : `Frivillig arbeid${e.pay?.inWarnings === false ? ', utenfor varsler om hviletid' : ''}`)}${L.payType(e) === 'hourly' && !(Number(e.rate) > 0) ? '<br><span class="flag missing">Mangler timelønn, trykk for å legge inn</span>' : ''}</span>
       <span class="meta num">${n} ${n === 1 ? 'vakt' : 'vakter'}</span></button></div>`;
   }).join('');
 }
@@ -477,7 +506,11 @@ function openEmp(e = null) {
   $('eArchived').checked = !!e?.archived;
   $('deleteEmpBtn').hidden = !e;
   ui.rules = structuredClone(e?.rules || []);
-  renderRules(); toggleOt();
+  ui.payType = L.payType(e);
+  $('eFee').value = e?.pay?.feeDefault ?? '';
+  $('eHoliday').checked = e ? L.givesHolidayPay(e) : false;
+  $('eWarn').checked = e?.pay?.inWarnings !== false;
+  renderRules(); toggleOt(); togglePayType();
   $('empErrors').innerHTML = '';
   $('empDialog').showModal();
 }
@@ -512,6 +545,22 @@ function onRuleInput(ev) {
 
 function toggleOt() { $('otFields').hidden = !$('eOtOn').checked; }
 
+const PAY_HELP = {
+  hourly: 'Lønn per time, med tillegg for kveld, natt, helg og overtid.',
+  fee: 'Et avtalt beløp per oppdrag, for eksempel foredrag, kurs eller frilansjobber. Beløpet føres på hver vakt.',
+  volunteer: 'Ubetalt arbeid. Timene føres, så du har oversikt og kan lage timelister til attester.',
+};
+function togglePayType() {
+  const t = ui.payType || 'hourly';
+  document.querySelectorAll('[data-paytype]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.paytype === t)));
+  $('payHelp').textContent = PAY_HELP[t];
+  $('eRateL').hidden = t !== 'hourly';
+  $('eFeeL').hidden = t !== 'fee';
+  $('eHolidayL').hidden = t !== 'fee';
+  $('eWarnL').hidden = t !== 'volunteer';
+  $('rulesBox').hidden = $('otBox').hidden = t !== 'hourly';
+}
+
 function saveEmp(ev) {
   ev.preventDefault();
   const e = {
@@ -524,7 +573,11 @@ function saveEmp(ev) {
     } : null,
     archived: $('eArchived').checked,
   };
-  if ($('eRate').value === '') e.rate = NaN;
+  const t = ui.payType || 'hourly';
+  e.pay = t === 'fee' ? { type: 'fee', feeDefault: $('eFee').value === '' ? null : Number($('eFee').value), holidayPay: $('eHoliday').checked }
+    : t === 'volunteer' ? { type: 'volunteer', inWarnings: $('eWarn').checked } : null;
+  if (t !== 'hourly') e.rate = 0;
+  else if ($('eRate').value === '') e.rate = NaN;
   const errs = L.validateEmployer(e);
   if (errs.length) { $('empErrors').innerHTML = errs.map(x => `<li>${esc(x)}</li>`).join(''); return; }
   store.upsertEmployer(e);
@@ -543,6 +596,14 @@ function renderMonth() {
     <div><b>${kr(shown(total.pay))}</b><span>${payWord()[0].toUpperCase() + payWord().slice(1)}</span></div>
     <div><b>${kr(total.holidayPay)}</b><span>Feriepenger opptjent${showNet() ? ' (brutto)' : ''}</span></div>`;
   renderPaySeg();
+  const bk = total.byKind, parts = [];
+  if (bk.fee.count || bk.volunteer.count) {
+    if (bk.hourly.count) parts.push(`Timelønn: ${hrs(bk.hourly.hours)}, ${kr(shown(bk.hourly.pay))}`);
+    if (bk.fee.count) parts.push(`Honorar og faste beløp: ${bk.fee.count} ${bk.fee.count === 1 ? 'oppdrag' : 'oppdrag'}, ${kr(shown(bk.fee.pay))}`);
+    if (bk.volunteer.count) parts.push(`Frivillig: ${hrs(bk.volunteer.hours)}`);
+  }
+  $('kindSplit').textContent = parts.join('. ');
+  $('kindSplit').hidden = !parts.length;
   const ids = Object.keys(byEmp);
   if (!ids.length) {
     $('empTable').innerHTML = '<tbody><tr><td class="empty" colspan="6">Ingen vakter denne måneden.</td></tr></tbody>';
@@ -552,7 +613,7 @@ function renderMonth() {
         const e = empById(id), o = byEmp[id];
         const subs = Object.values(o.supplements).filter(x => x.hours > 0).map(x => `${esc(x.label)} ${hrs(x.hours)}`).join(', ');
         return `<tr><td><span class="cell-who"><span class="dot" style="background:${safeColor(e?.color)}"></span>${esc(e?.name || 'Ukjent')}</span>${subs ? `<span class="sub">${subs}</span>` : ''}</td>
-          <td>${o.count}</td><td>${hrs(o.hours)}</td><td>${kr(o.supplementPay)}</td><td>${o.overtimePay ? kr(o.overtimePay) : '–'}</td><td>${kr(shown(o.pay))}</td></tr>`;
+          <td>${o.count}</td><td>${hrs(o.hours)}</td><td>${kr(o.supplementPay)}</td><td>${o.overtimePay ? kr(o.overtimePay) : '–'}</td><td>${o.kind === 'volunteer' && !o.pay ? 'Frivillig' : kr(shown(o.pay))}</td></tr>`;
       }).join('')
       + `</tbody><tfoot><tr><td>Sum</td><td>${total.count}</td><td>${hrs(total.hours)}</td><td>${kr(total.supplementPay)}</td><td>${total.overtimePay ? kr(total.overtimePay) : '–'}</td><td>${kr(shown(total.pay))}</td></tr></tfoot>`;
   }
@@ -566,7 +627,7 @@ function renderMonth() {
   renderYear(y);
   $('pdfBtn').disabled = !ids.length;
 
-  const warns = L.checkRest(D().shifts, D().settings.minRestH);
+  const warns = L.restWarnings(D().shifts, D().employers, D().settings.minRestH);
   const list = L.shiftsInMonth(D().shifts, ui.month).filter(s => warns[s.id]);
   const weeks = L.weeklyOverLimit(D().shifts, D().employers, D().settings.weekLimitH)
     .filter(w => L.shiftsInMonth(D().shifts, ui.month).some(s => { const k = L.isoWeek(L.parseDate(s.date)); return `${k.year}-U${L.pad(k.week)}` === w.week; }));
@@ -606,7 +667,7 @@ function renderYear(y) {
   const ids = Object.keys(byEmp);
   $('yearTable').innerHTML = ids.length ? `<thead><tr><th>Arbeidsgiver</th><th>Vakter</th><th>Timer</th><th>${showNet() ? 'Ca. netto' : 'Estimert'}</th></tr></thead><tbody>`
     + ids.map(id => { const e = empById(id), o = byEmp[id];
-      return `<tr><td><span class="cell-who"><span class="dot" style="background:${safeColor(e?.color)}"></span>${esc(e?.name || 'Ukjent')}</span></td><td>${o.count}</td><td>${hrs(o.hours)}</td><td>${kr(shown(o.pay))}</td></tr>`; }).join('')
+      return `<tr><td><span class="cell-who"><span class="dot" style="background:${safeColor(e?.color)}"></span>${esc(e?.name || 'Ukjent')}</span></td><td>${o.count}</td><td>${hrs(o.hours)}</td><td>${L.payType(e) === 'volunteer' && !o.pay ? 'Frivillig' : kr(shown(o.pay))}</td></tr>`; }).join('')
     + '</tbody>' : '';
 }
 
@@ -642,7 +703,8 @@ function printTimesheet() {
   print();
 }
 
-function renderPayslips(byEmp, ids) {
+function renderPayslips(byEmp, allIds) {
+  const ids = allIds.filter(id => L.payType(empById(id)) !== 'volunteer');
   const paid = D().settings.payslips?.[ui.month] || {};
   if (!ids.length) { $('payslipList').innerHTML = '<p class="muted">Ingen vakter å sammenligne denne måneden.</p>'; return; }
   const diffs = new Map(L.payslipDiff({ byEmp }, paid).map(d => [d.employerId, d]));
@@ -683,7 +745,7 @@ function renderAccount() {
     const n = store.pending;
     p.innerHTML = `<h2>Konto</h2>
       <p>Logget inn som <b>${esc(store.user.email)}</b></p>
-      ${store.noSeriesColumn ? '<p class="flag block rest">Databasen mangler støtte for gjentakende vakter. Vaktene lagres, men koblingen til serien synkes ikke. Kjør oppdatert SQL fra README i Supabase.</p>' : ''}
+      ${store.missingCols?.size ? `<p class="flag block rest">Databasen mangler ${[...store.missingCols].map(c => ({ series_id: 'gjentakende vakter', fee: 'beløp per vakt', pay: 'honorar og frivillig' })[c]).join(' og ')}. Vaktene lagres, men dette synkes ikke mellom enheter før du kjører oppdatert SQL fra README i Supabase.</p>` : ''}
       <p class="small muted">${n ? `${n} ${n === 1 ? 'endring' : 'endringer'} venter på å bli synket.` : 'Alle endringer er synket.'}${store.lastError ? ` ${esc(friendlyError(store.lastError))}${contact ? ` Vedvarer feilen, kontakt <a href="mailto:${esc(contact)}">${esc(contact)}</a>.` : ''}` : ''}</p>
       <div class="row"><button class="btn" data-action="sync-now">Synk nå</button><button class="btn" data-action="sign-out">Logg ut</button></div>`;
   }
@@ -825,7 +887,8 @@ $('newShiftBtn').addEventListener('click', () => openShift());
 $('shiftForm').addEventListener('submit', saveShift);
 $('shiftForm').addEventListener('input', updatePreview);
 $('fEmp').addEventListener('change', () => {
-  if (ui.shift) return;
+  togglePayFields(null, true);
+  if (ui.shift) { updatePreview(); return; }
   const last = lastShiftFor($('fEmp').value);
   if (last) setFields({ start: last.start, end: last.end, brk: last.breakMin });
   updatePreview();
@@ -881,6 +944,11 @@ $('presetBtn').addEventListener('click', () => {
   renderRules(); toast('Fyll inn beløpene fra avtalen din');
 });
 $('eOtOn').addEventListener('change', toggleOt);
+document.querySelectorAll('[data-paytype]').forEach(b => b.addEventListener('click', () => {
+  ui.payType = b.dataset.paytype;
+  if (ui.payType === 'fee' && !ui.emp) $('eHoliday').checked = false;
+  togglePayType();
+}));
 $('deleteEmpBtn').addEventListener('click', async () => {
   const e = ui.emp; if (!e) return;
   const n = D().shifts.filter(s => s.employerId === e.id).length;

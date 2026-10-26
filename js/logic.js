@@ -91,8 +91,27 @@ export function ruleMatches(rule, dt) {
   return f < t ? m >= f && m < t : m >= f || m < t;
 }
 
+// Lønnsform per arbeidsgiver: emp.pay = { type: 'hourly' | 'fee' | 'volunteer', feeDefault, holidayPay, inWarnings }.
+// Uten pay er det timelønn som før. s.fee er et avtalt beløp for akkurat denne vakta og overstyrer alt.
+export const payType = emp => emp?.pay?.type || 'hourly';
+export const givesHolidayPay = emp => payType(emp) === 'volunteer' ? false : (emp?.pay?.holidayPay ?? payType(emp) === 'hourly');
+export const hasFixedFee = s => s.fee !== null && s.fee !== undefined && s.fee !== '' && Number.isFinite(Number(s.fee));
+
 export function calcShift(s, emp = {}) {
+  emp = emp || {};
   const { start, end } = parseShift(s);
+  const type = payType(emp);
+  if (type !== 'hourly' || hasFixedFee(s)) {
+    const gross0 = (end - start) / MIN;
+    const hours = (gross0 - Math.min(Math.max(Number(s.breakMin) || 0, 0), gross0)) / 60;
+    const pay = type === 'volunteer' && !hasFixedFee(s) ? 0
+      : hasFixedFee(s) ? Number(s.fee) : Number(emp.pay?.feeDefault) || 0;
+    return {
+      start, end, hours, base: pay, supplements: [], overtimeH: 0, overtimePay: 0, otRate: 0, pay,
+      kind: type, fixed: true, effectiveRate: hours > 0 && pay > 0 ? pay / hours : null,
+      holidayBase: givesHolidayPay(emp) ? pay : 0,
+    };
+  }
   const gross = (end - start) / MIN;
   const brk = Math.min(Math.max(Number(s.breakMin) || 0, 0), gross);
   const worked = gross - brk;
@@ -118,7 +137,7 @@ export function calcShift(s, emp = {}) {
   const otRate = rate * (Number(emp.overtime?.pct) || 0) / 100;
   const overtimePay = overtimeH * otRate;
   const pay = base + supplements.reduce((a, x) => a + x.amount, 0) + overtimePay;
-  return { start, end, hours, base, supplements, overtimeH, overtimePay, otRate, pay };
+  return { start, end, hours, base, supplements, overtimeH, overtimePay, otRate, pay, kind: 'hourly', fixed: false, effectiveRate: null, holidayBase: givesHolidayPay(emp) ? pay : 0 };
 }
 
 // Regner ut alle vakter samlet, slik at overtid per uke blir riktig.
@@ -151,6 +170,7 @@ export function calcAll(shifts, employers) {
         c.overtimeH += extra;
         c.overtimePay += extra * c.otRate;
         c.pay += extra * c.otRate;
+        if (c.holidayBase) c.holidayBase += extra * c.otRate;
       }
     }
   }
@@ -174,10 +194,25 @@ export function checkRest(shifts, minRestH = DEFAULT_SETTINGS.minRestH) {
   return warn;
 }
 
+// Frivillige arbeidsgivere kan velge å holde seg utenfor varsler om hviletid og ukegrense.
+export function countsForWarnings(s, employers) {
+  const emp = employers.find(e => e.id === s.employerId);
+  return !(payType(emp) === 'volunteer' && emp.pay?.inWarnings === false);
+}
+export function restWarnings(shifts, employers, minRestH) {
+  const w = checkRest(shifts, minRestH);
+  const byId = new Map(shifts.map(s => [s.id, s]));
+  for (const [id, x] of Object.entries(w)) {
+    if (x.type === 'rest' && (!countsForWarnings(byId.get(id), employers) || !countsForWarnings(byId.get(x.with), employers))) delete w[id];
+  }
+  return w;
+}
+
 // Samlet arbeidstid per ISO-uke på tvers av arbeidsgivere. Returnerer uker over grensen.
 export function weeklyOverLimit(shifts, employers, limitH = DEFAULT_SETTINGS.weekLimitH) {
   const byWeek = {};
   for (const s of shifts) {
+    if (!countsForWarnings(s, employers)) continue;
     const emp = employers.find(e => e.id === s.employerId);
     const { year, week } = isoWeek(parseDate(s.date));
     const k = `${year}-U${pad(week)}`;
@@ -228,6 +263,7 @@ export function validateShift(s, employers = []) {
   const b = Number(s.breakMin);
   if (!Number.isFinite(b) || b < 0 || b > 600) errors.push('Pausen må være mellom 0 og 600 minutter.');
   if (String(s.note || '').length > 200) errors.push('Notatet kan ha maks 200 tegn.');
+  if (hasFixedFee(s) && !(Number(s.fee) >= 0 && Number(s.fee) <= 1000000)) errors.push('Beløpet må være mellom 0 og 1 000 000 kr.');
   if (!errors.length) {
     const { start, end } = parseShift(s);
     if (b >= (end - start) / MIN) errors.push('Pausen er like lang som eller lengre enn vakta.');
@@ -240,7 +276,8 @@ export function validateEmployer(e) {
   const name = String(e.name || '').trim();
   if (!name || name.length > 60) errors.push('Navnet må ha 1–60 tegn.');
   const r = Number(e.rate);
-  if (!Number.isFinite(r) || r < 0 || r > 10000) errors.push('Timelønn må være mellom 0 og 10 000 kr.');
+  if (payType(e) === 'hourly' && (!Number.isFinite(r) || r < 0 || r > 10000)) errors.push('Timelønn må være mellom 0 og 10 000 kr.');
+  if (payType(e) === 'fee' && e.pay.feeDefault != null && e.pay.feeDefault !== '' && !(Number(e.pay.feeDefault) >= 0 && Number(e.pay.feeDefault) <= 1000000)) errors.push('Standardhonoraret må være mellom 0 og 1 000 000 kr.');
   for (const rule of e.rules || []) {
     if (!rule.holiday && !(rule.days || []).length) errors.push(`«${rule.label || 'Tillegg'}» må gjelde minst én dag.`);
     if (!TIME_RE.test(rule.from || '') || !TIME_RE.test(rule.to || '')) errors.push(`«${rule.label || 'Tillegg'}» trenger gyldige klokkeslett.`);
@@ -348,11 +385,16 @@ export function shiftsInMonth(shifts, ym) {
 
 export function monthSummary(shifts, employers, ym, settings = DEFAULT_SETTINGS) {
   const byEmp = {};
-  const total = { hours: 0, supplementPay: 0, overtimePay: 0, pay: 0, count: 0 };
+  const total = { hours: 0, supplementPay: 0, overtimePay: 0, pay: 0, count: 0, holidayBase: 0,
+    byKind: { hourly: { hours: 0, pay: 0, count: 0 }, fee: { hours: 0, pay: 0, count: 0 }, volunteer: { hours: 0, pay: 0, count: 0 } } };
   const all = calcAll(shifts, employers);
   for (const s of shiftsInMonth(shifts, ym)) {
     const c = all.get(s.id);
-    const o = byEmp[s.employerId] ||= { hours: 0, supplementPay: 0, overtimePay: 0, pay: 0, count: 0, supplements: {} };
+    const emp = employers.find(e => e.id === s.employerId);
+    const o = byEmp[s.employerId] ||= { hours: 0, supplementPay: 0, overtimePay: 0, pay: 0, count: 0, supplements: {}, kind: payType(emp) };
+    total.holidayBase += c.holidayBase || 0;
+    const k = total.byKind[c.fixed && payType(emp) === 'hourly' ? 'fee' : payType(emp)];
+    k.hours += c.hours; k.pay += c.pay; k.count++;
     const sup = c.supplements.reduce((a, x) => a + x.amount, 0);
     for (const t of [o, total]) {
       t.hours += c.hours; t.supplementPay += sup; t.overtimePay += c.overtimePay; t.pay += c.pay; t.count++;
@@ -362,7 +404,7 @@ export function monthSummary(shifts, employers, ym, settings = DEFAULT_SETTINGS)
       k.hours += x.hours; k.amount += x.amount;
     }
   }
-  total.holidayPay = total.pay * (Number(settings.holidayPayPct) || 0) / 100;
+  total.holidayPay = total.holidayBase * (Number(settings.holidayPayPct) || 0) / 100;
   const tax = Number(settings.taxPct) || 0;
   total.net = tax > 0 ? total.pay * (1 - tax / 100) : null;
   return { byEmp, total };
@@ -373,14 +415,15 @@ export function yearSummary(shifts, employers, year, settings = DEFAULT_SETTINGS
   const all = calcAll(shifts, employers);
   const months = Array.from({ length: 12 }, (_, i) => ({ ym: `${year}-${pad(i + 1)}`, hours: 0, pay: 0, count: 0 }));
   const byEmp = {};
-  const total = { hours: 0, pay: 0, count: 0 };
+  const total = { hours: 0, pay: 0, count: 0, holidayBase: 0 };
   for (const s of shifts) {
     if (!s.date.startsWith(`${year}-`)) continue;
     const c = all.get(s.id), m = months[Number(s.date.slice(5, 7)) - 1];
+    total.holidayBase += c.holidayBase || 0;
     const e = byEmp[s.employerId] ||= { hours: 0, pay: 0, count: 0 };
     for (const t of [m, e, total]) { t.hours += c.hours; t.pay += c.pay; t.count++; }
   }
-  total.holidayPay = total.pay * (Number(settings.holidayPayPct) || 0) / 100;
+  total.holidayPay = total.holidayBase * (Number(settings.holidayPayPct) || 0) / 100;
   return { months, byEmp, total };
 }
 

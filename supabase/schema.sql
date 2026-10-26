@@ -111,3 +111,9 @@ grant execute on function public.keepalive() to anon, authenticated;
 -- Vakter i samme serie har samme series_id. Selve regelen ligger i settings.data.series.
 alter table public.shifts add column if not exists series_id uuid;
 create index if not exists shifts_series_idx on public.shifts (user_id, series_id) where series_id is not null;
+
+-- ---------- Honorar og frivillig arbeid ----------
+-- employers.pay: { type: 'hourly' | 'fee' | 'volunteer', feeDefault, holidayPay, inWarnings }
+-- shifts.fee: avtalt beløp for akkurat denne vakta (honorar eller fast pris)
+alter table public.employers add column if not exists pay jsonb;
+alter table public.shifts add column if not exists fee numeric(10,2) check (fee is null or fee between 0 and 1000000);
