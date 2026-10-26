@@ -391,7 +391,7 @@ export function toICS(shifts, employers, now = new Date()) {
 }
 
 // ---------- Import fra kalender (.ics) ----------
-// Leser hendelser fra en kalenderfil (Google, iPhone, Outlook, vaktplansystemer).
+// Leser hendelser fra en kalenderfil eller -lenke (iPhone/iCloud, Google, Outlook, vaktplansystemer).
 // Tider med Z tolkes som UTC, tider med TZID eller uten sone som lokal tid (norsk tid i praksis).
 
 function icsDateValue(value, params) {
@@ -407,52 +407,165 @@ const icsUnescape = t => t.replace(/\\n/gi, ' ').replace(/\\([,;\\])/g, '$1').tr
 export function parseICS(text) {
   const lines = String(text).replace(/\r?\n[ \t]/g, '').split(/\r?\n/);
   if (!lines.some(l => l.trim() === 'BEGIN:VCALENDAR')) throw new Error('not-ics');
-  const events = [];
+  const raw = [];
   let ev = null;
   for (const line of lines) {
-    if (line === 'BEGIN:VEVENT') { ev = {}; continue; }
-    if (line === 'END:VEVENT') { if (ev) events.push(ev); ev = null; continue; }
+    if (line === 'BEGIN:VEVENT') { ev = { exdates: [] }; continue; }
+    if (line === 'END:VEVENT') { if (ev) raw.push(ev); ev = null; continue; }
     if (!ev) continue;
     const i = line.indexOf(':'); if (i < 0) continue;
-    const head = line.slice(0, i), value = line.slice(i + 1);
+    const head = line.slice(0, i), value = line.slice(i + 1).trim();
     const [name, ...params] = head.split(';');
     const key = name.toUpperCase(), par = params.join(';');
-    if (key === 'DTSTART' || key === 'DTEND') ev[key] = icsDateValue(value.trim(), par);
+    if (key === 'DTSTART' || key === 'DTEND' || key === 'RECURRENCE-ID') ev[key] = icsDateValue(value, par);
+    else if (key === 'EXDATE') for (const v of value.split(',')) { const d = icsDateValue(v.trim(), par); if (d && d.date) ev.exdates.push(d.date.getTime()); }
     else if (key === 'SUMMARY') ev.summary = icsUnescape(value);
-    else if (key === 'UID') ev.uid = value.trim();
-    else if (key === 'RRULE') ev.recurring = true;
+    else if (key === 'UID') ev.uid = value;
+    else if (key === 'RRULE') ev.rrule = value;
     else if (key === 'STATUS') ev.cancelled = /CANCELLED/i.test(value);
   }
-  return events.map(e => ({
-    uid: e.uid || '', summary: e.summary || '', recurring: !!e.recurring, cancelled: !!e.cancelled,
-    allDay: !!(e.DTSTART && e.DTSTART.allDay),
+  return raw.map(e => ({
+    uid: e.uid || '', summary: e.summary || '', rrule: e.rrule || '', exdates: e.exdates,
+    recurrenceId: e['RECURRENCE-ID'] && e['RECURRENCE-ID'].date ? e['RECURRENCE-ID'].date.getTime() : null,
+    cancelled: !!e.cancelled, allDay: !!(e.DTSTART && e.DTSTART.allDay),
     start: e.DTSTART && e.DTSTART.date || null, end: e.DTEND && e.DTEND.date || null,
   }));
 }
 
-// Gjør kalenderhendelser om til vakter. employerFor(summary) returnerer arbeidsgiver-id eller null.
-// Hopper over heldagshendelser, avlyste, gjentakende (RRULE), for lange, utenfor perioden og dubletter.
-export function icsToShifts(events, { employerFor, from, to, contains = '', existing = [], newId }) {
-  const skipped = { allDay: 0, recurring: 0, cancelled: 0, invalid: 0, outside: 0, filtered: 0, noEmployer: 0, duplicate: 0 };
-  const seen = new Set(existing.map(s => `${s.employerId}|${s.date}|${s.start}|${s.end}`));
+// Gjør gjentakende hendelser (RRULE) om til enkeltforekomster innenfor perioden.
+// Støtter FREQ=DAILY og WEEKLY med INTERVAL, BYDAY, COUNT, UNTIL og EXDATE, og endrede enkeltforekomster
+// (RECURRENCE-ID). Andre regler markeres som ikke støttet.
+const BYDAY = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
+export function expandEvents(events, from, to) {
+  const out = [];
+  const overrides = new Set(events.filter(e => e.recurrenceId).map(e => `${e.uid}|${e.recurrenceId}`));
+  const fromT = from ? parseDate(from).getTime() : -Infinity;
+  const toT = to ? parseDate(to).getTime() + 86400000 : Infinity;
+  for (const e of events) {
+    if (!e.rrule || e.recurrenceId || e.allDay || !e.start || !e.end) { out.push(e); continue; }
+    const r = Object.fromEntries(e.rrule.split(';').map(p => p.split('=')).map(([k, v]) => [k.toUpperCase(), v]));
+    if (!['DAILY', 'WEEKLY'].includes(r.FREQ)) { out.push({ ...e, unsupported: true }); continue; }
+    const interval = Math.max(1, Number(r.INTERVAL) || 1);
+    const count = r.COUNT ? Number(r.COUNT) : Infinity;
+    const until = r.UNTIL ? (icsDateValue(r.UNTIL, '').date || (/^\d{8}$/.test(r.UNTIL) ? new Date(+r.UNTIL.slice(0, 4), r.UNTIL.slice(4, 6) - 1, +r.UNTIL.slice(6), 23, 59) : null)) : null;
+    const days = r.FREQ === 'WEEKLY' && r.BYDAY ? r.BYDAY.split(',').map(d => BYDAY[d.slice(-2)]).filter(d => d !== undefined) : [e.start.getDay()];
+    const dur = e.end - e.start, exd = new Set(e.exdates || []);
+    const h = e.start.getHours(), mi = e.start.getMinutes();
+    let n = 0;
+    const weekStart = mondayOf(e.start);
+    for (let step = 0; step < 3000 && n < count; step++) {
+      const candidates = r.FREQ === 'DAILY'
+        ? [new Date(e.start.getFullYear(), e.start.getMonth(), e.start.getDate() + step * interval, h, mi)]
+        : days.map(d => new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + step * 7 * interval + ((d + 6) % 7), h, mi))
+          .sort((a, b) => a - b);
+      let past = false;
+      for (const st of candidates) {
+        if (st < e.start) continue;
+        if ((until && st > until) || st.getTime() >= toT) { past = true; break; }
+        if (n >= count) break;
+        n++;
+        const t = st.getTime();
+        if (exd.has(t) || overrides.has(`${e.uid}|${t}`) || t < fromT) continue;
+        out.push({ ...e, rrule: '', start: st, end: new Date(t + dur), fromRule: true });
+      }
+      if (past) break;
+    }
+  }
+  return out;
+}
+
+export const shiftKey = s => `${s.employerId}|${s.date}|${s.start}|${s.end}`;
+
+// Gjør kalenderhendelser om til forslag til vakter. employerFor(summary) returnerer arbeidsgiver-id eller null.
+// Returnerer kandidater (med tittel, så brukeren kan velge) og hvorfor resten hoppes over.
+export function icsToShifts(events, { employerFor, from, to, contains = '', existing = [], newId, breakMin = 0 }) {
+  const skipped = { allDay: 0, unsupported: 0, cancelled: 0, invalid: 0, outside: 0, filtered: 0, noEmployer: 0, duplicate: 0 };
+  const seen = new Set(existing.map(shiftKey));
   const shifts = [];
   const hhmm = d => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  for (const e of events) {
+  for (const e of expandEvents(events, from, to)) {
     if (e.cancelled) { skipped.cancelled++; continue; }
     if (e.allDay) { skipped.allDay++; continue; }
-    if (e.recurring) { skipped.recurring++; continue; }
+    if (e.unsupported) { skipped.unsupported++; continue; }
     if (!e.start || !e.end || e.end <= e.start || e.end - e.start > 24 * HOUR) { skipped.invalid++; continue; }
     const date = isoDate(e.start);
     if ((from && date < from) || (to && date > to)) { skipped.outside++; continue; }
     if (contains && !e.summary.toLowerCase().includes(contains.toLowerCase())) { skipped.filtered++; continue; }
     const employerId = employerFor(e.summary);
     if (!employerId) { skipped.noEmployer++; continue; }
-    const s = { id: newId(), employerId, date, start: hhmm(e.start), end: hhmm(e.end), breakMin: 0, note: '' };
-    const key = `${employerId}|${date}|${s.start}|${s.end}`;
-    if (seen.has(key)) { skipped.duplicate++; continue; }
-    seen.add(key);
+    const brk = Math.min(Number(breakMin) || 0, Math.max(0, (e.end - e.start) / MIN - 1));
+    const s = { id: newId(), employerId, date, start: hhmm(e.start), end: hhmm(e.end), breakMin: brk, note: '', title: e.summary };
+    if (seen.has(shiftKey(s))) { skipped.duplicate++; continue; }
+    seen.add(shiftKey(s));
     shifts.push(s);
   }
+  shifts.sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
+  return { shifts, skipped };
+}
+
+// ---------- Import fra regneark (CSV) ----------
+// Godtar Vaktboks egen eksport og vanlige timelister: ; eller , som skilletegn, datoer som
+// 2026-10-27, 27.10.2026, 27.10.26 eller 27/10/2026, og klokkeslett som 08:00, 8:00 eller 08.00.
+
+export function parseCSV(text) {
+  const src = String(text).replace(/^\uFEFF/, '');
+  const firstLine = src.split(/\r?\n/, 1)[0] || '';
+  const sep = (firstLine.match(/;/g) || []).length >= (firstLine.match(/,/g) || []).length ? ';' : ',';
+  const rows = []; let row = [], cell = '', q = false;
+  for (let i = 0; i < src.length; i++) {
+    const c = src[i];
+    if (q) { if (c === '"' && src[i + 1] === '"') { cell += '"'; i++; } else if (c === '"') q = false; else cell += c; }
+    else if (c === '"') q = true;
+    else if (c === sep) { row.push(cell); cell = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && src[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+    else cell += c;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows.map(r => r.map(x => x.trim().replace(/^'(?=[=+\-@])/, ''))).filter(r => r.some(x => x));
+}
+
+export function normDate(v) {
+  v = String(v || '').trim();
+  let m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(v);
+  if (m) return `${m[1]}-${pad(+m[2])}-${pad(+m[3])}`;
+  m = /^(\d{1,2})[./](\d{1,2})[./](\d{2}|\d{4})$/.exec(v);
+  if (m) { const y = m[3].length === 2 ? 2000 + +m[3] : +m[3]; return `${y}-${pad(+m[2])}-${pad(+m[1])}`; }
+  return null;
+}
+export function normTime(v) {
+  const m = /^(\d{1,2})[:.](\d{2})(?:[:.]\d{2})?$/.exec(String(v || '').trim());
+  if (!m || +m[1] > 24 || +m[2] > 59) return null;
+  return `${pad(+m[1] % 24)}:${m[2]}`;
+}
+
+// Gjetter hvilke kolonner som er hva ut fra overskriftene.
+export function guessColumns(header) {
+  const find = re => header.findIndex(h => re.test(h.toLowerCase()));
+  return {
+    date: find(/^(dato|date|dag)/), start: find(/^(start|fra|from|begin|inn)/), end: find(/^(slutt|til|to\b|end|ut)/),
+    breakMin: find(/^(pause|break)/), employer: find(/^(arbeidsgiver|employer|firma|jobb|sted|kunde)/), note: find(/^(notat|note|kommentar|merknad)/),
+  };
+}
+
+// Rader blir vakter. employerFor(navn) returnerer id, eller null (da brukes standard-arbeidsgiveren).
+export function csvToShifts(rows, cols, { employerFor, defaultEmployerId, existing = [], newId, breakMin = 0 }) {
+  const skipped = { invalid: 0, noEmployer: 0, duplicate: 0 };
+  const seen = new Set(existing.map(shiftKey));
+  const shifts = [];
+  for (const r of rows) {
+    const date = normDate(r[cols.date]), start = normTime(r[cols.start]), end = normTime(r[cols.end]);
+    if (!date || !start || !end) { skipped.invalid++; continue; }
+    const name = cols.employer >= 0 ? (r[cols.employer] || '').trim() : '';
+    const employerId = (name && employerFor(name)) || defaultEmployerId;
+    if (!employerId) { skipped.noEmployer++; continue; }
+    const b = cols.breakMin >= 0 && r[cols.breakMin] !== '' ? Number(String(r[cols.breakMin]).replace(',', '.')) : Number(breakMin);
+    const s = { id: newId(), employerId, date, start, end, breakMin: Number.isFinite(b) && b >= 0 ? Math.round(b) : 0,
+      note: cols.note >= 0 ? String(r[cols.note] || '').slice(0, 200) : '', title: name };
+    if (seen.has(shiftKey(s))) { skipped.duplicate++; continue; }
+    seen.add(shiftKey(s));
+    shifts.push(s);
+  }
+  shifts.sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
   return { shifts, skipped };
 }
 

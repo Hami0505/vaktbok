@@ -22,7 +22,7 @@ Videreutviklingen er gjort på samme måte som innleveringen: jeg beskrev behov 
 - **Feriepenger** (10,2 % eller 12 %), og valg mellom brutto og netto i oversiktene (netto regnes fra skatteprosenten din).
 - **Varsler** ved for kort hviletid (11 timer, justerbart), overlappende vakter og når samlet arbeidstid i en uke passerer en grense.
 - **Oversikt** over måned og år per arbeidsgiver, med diagram over året. Hold over eller trykk på en måned for å se tallene og åpne den. Regneark (CSV for Excel), kalenderfil (.ics), timeliste til utklippstavlen og timeliste som PDF med signaturfelt.
-- **Import fra kalender:** hent vakter fra en kalenderfil (.ics) fra Google Kalender, iPhone, Outlook eller vaktplanen til et byrå. Velg arbeidsgiver, periode og filter, og se hva som importeres før du bekrefter. Dubletter hoppes over.
+- **Importer vakter** fra kalenderlenke (iPhone og iCloud, Google, Outlook, byråets vaktplan), kalenderfil (.ics), regneark (.csv) eller sikkerhetskopi. Gjentakende hendelser blir enkeltvakter, du ser og velger vaktene før import, setter standardpause, og dubletter hoppes over. Lagrede kalenderlenker kan hentes på nytt med ett trykk.
 - **Sjekk mot lønnsslippen:** skriv inn utbetalt brutto og se om det stemmer med estimatet.
 - **Konto og synk i sanntid** mellom mobil og PC, med innlogging via engangskode på e-post. Uten konto fungerer alt lokalt i nettleseren.
 - **Fungerer offline** og kan installeres på hjemskjermen. Endringer gjort uten nett sendes når nettet er tilbake.
@@ -40,11 +40,13 @@ Ren HTML, CSS og JavaScript-moduler. Ingen build-steg, så appen ligger rett på
 | `js/sync-core.js` | Ren synklogikk: utboks, rekkefølge, sammenslåing med serverdata |
 | `js/store.js` | Datalag: lokal lagring, utboks, synk og sanntid mot Supabase |
 | `js/demo.js` | Tilfeldige eksempeldata |
+| `js/importer.js` | Import fra kalenderlenke, kalenderfil, regneark og sikkerhetskopi |
+| `supabase/functions/ics-proxy/` | Serverfunksjon som henter kalendere fra lenke for innloggede brukere |
 | `js/app.js` | Brukergrensesnitt |
 | `js/config.js` | Supabase-nøkler og kontaktadresse (offentlige verdier, tilgang styres av RLS) |
 | `supabase/schema.sql` | Tabeller, tilganger, Row Level Security, sanntid og sletting av konto |
 | `sw.js` | Service worker for offline-bruk |
-| `tests/` | 42 automatiske tester, kjøres på hver push via GitHub Actions |
+| `tests/` | 47 automatiske tester, kjøres på hver push via GitHub Actions |
 
 Lagring er lokal først: alle endringer lagres i nettleseren med en gang og legges i en utboks. Når brukeren er innlogget og på nett, sendes utboksen til Supabase og serverdata hentes inn. Andre enheter får beskjed i sanntid. Serveren er fasit, unntatt for endringer som ennå ikke er sendt.
 
@@ -79,6 +81,17 @@ Med tomme felt i `js/config.js` kjører appen uten server, bare med lokal lagrin
 2. **SQL Editor**: lim inn hele `supabase/schema.sql` og kjør.
 3. **Authentication → URL Configuration**: sett **Site URL** til adressen appen ligger på, og legg den samme adressen og `http://localhost:5173` til under **Redirect URLs**.
 4. **Connect** (øverst) eller **Project Settings → API**: kopier Project URL og publishable/anon-nøkkelen inn i `js/config.js`. Bruk aldri `service_role`- eller secret-nøkkelen.
+
+### Kalenderlenker (serverfunksjon)
+
+Nettlesere får ikke hente kalenderfiler fra andre nettsteder direkte, så import fra lenke går via en liten serverfunksjon.
+
+1. Supabase → **Edge Functions** → **Deploy a new function** → **Via Editor**.
+2. Gi den navnet `ics-proxy`, lim inn hele `supabase/functions/ics-proxy/index.ts` og trykk **Deploy**.
+3. Åpne funksjonen → **Details** (eller Settings) og slå **av** «Verify JWT» / «Enforce JWT verification». Funksjonen sjekker selv at brukeren er innlogget, og gjør det på en måte som virker med alle nøkkeltyper.
+4. Bruker appen en annen adresse enn `https://hami0505.github.io`, legg den til i `ALLOWED_ORIGINS` øverst i funksjonen.
+
+Uten funksjonen virker alt annet, og appen sier ifra hvis noen prøver å importere fra lenke.
 
 ### E-post (SMTP)
 

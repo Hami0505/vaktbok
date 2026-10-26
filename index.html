@@ -84,6 +84,7 @@
 
       <div class="actionbar">
         <button class="btn primary big" id="newShiftBtn" type="button">Ny vakt</button>
+        <button class="btn big" id="importBtn" type="button">Importer vakter</button>
         <p class="weeksum" id="weekSum"></p>
       </div>
 
@@ -172,10 +173,10 @@
         <p class="small muted" id="dataNote"></p>
         <div class="row">
           <button class="btn" id="exportBtn" type="button">Last ned alle data</button>
-          <label class="btn filebtn">Importer fra fil<input type="file" id="importFile" aria-describedby="importHelp"></label>
+          <button class="btn" type="button" id="importBtn2" aria-describedby="importHelp">Importer vakter</button>
           <button class="btn" id="demoBtn" type="button" hidden>Prøv med eksempeldata</button>
         </div>
-        <p class="help" id="importHelp">Godtar en fil lastet ned fra Vaktbok (.json) eller en kalenderfil (.ics) fra for eksempel Google Kalender, iPhone, Outlook eller vaktplanen til et byrå.</p>
+        <p class="help" id="importHelp">Fra kalenderlenke (iPhone, Google, Outlook, byråets vaktplan), kalenderfil (.ics), regneark (.csv) eller en sikkerhetskopi fra Vaktbok (.json).</p>
         <div class="row">
           <button class="btn danger" id="wipeBtn" type="button">Slett alle vakter og arbeidsgivere</button>
           <button class="btn danger" id="deleteAccountBtn" type="button" hidden>Slett kontoen min</button>
@@ -270,23 +271,63 @@
   </form>
 </dialog>
 
-<!-- Import fra kalender -->
-<dialog id="icsDialog" aria-labelledby="icsTitle">
-  <form method="dialog" id="icsForm" novalidate>
-    <h2 id="icsTitle">Importer fra kalender</h2>
-    <p class="small muted" id="icsFound"></p>
-    <div class="grid">
-      <label class="span2">Arbeidsgiver<select id="icsEmp"></select>
-        <span class="help">«Finn ut fra navnet» bruker arbeidsgiveren hvis navnet står i hendelsen, for eksempel «Vakt Kafé».</span></label>
-      <label>Fra og med<input type="date" id="icsFrom"></label>
-      <label>Til og med<input type="date" id="icsTo"></label>
-      <label class="span2">Bare hendelser som inneholder (valgfritt)<input type="text" id="icsContains" placeholder="F.eks. vakt" maxlength="40"></label>
+<!-- Importer vakter -->
+<dialog id="importDialog" class="wide" aria-labelledby="impTitle">
+  <form method="dialog" id="impForm" novalidate>
+    <h2 id="impTitle">Importer vakter</h2>
+
+    <div id="impSource">
+      <div class="sources">
+        <button type="button" class="source" data-src="link"><b>Kalenderlenke</b><span>Fra iPhone og iCloud, Google, Outlook eller vaktplanen til et byrå. Kan hentes på nytt senere.</span></button>
+        <button type="button" class="source" data-src="file"><b>Fil</b><span>Kalenderfil (.ics) fra e-post, regneark (.csv) fra Excel eller Numbers, eller sikkerhetskopi fra Vaktbok (.json).</span></button>
+      </div>
+      <input type="file" id="impFile" class="sr-only" tabindex="-1" aria-hidden="true">
+      <div id="savedLinks"></div>
     </div>
-    <div class="preview" id="icsPreview" aria-live="polite"></div>
+
+    <div id="impLink" hidden>
+      <div class="grid">
+        <label class="span2">Lenke til kalenderen<input type="url" id="impUrl" inputmode="url" autocomplete="off" placeholder="webcal://… eller https://…"></label>
+        <label class="span2">Navn (valgfritt)<input type="text" id="impLinkName" maxlength="40" placeholder="F.eks. Jobbkalender"></label>
+      </div>
+      <p class="flag block rest" id="impLinkLogin" hidden>Du må være logget inn for å hente kalendere fra lenke, så lenken kan lagres trygt i kontoen din. <button type="button" class="btn link inline" data-action="go-login">Logg inn under Konto</button></p>
+      <details class="howto">
+        <summary>Slik finner du lenken</summary>
+        <p><b>iPhone, egen kalender (iCloud):</b> Åpne Kalender-appen → <i>Kalendere</i> nederst → trykk ⓘ ved kalenderen → slå på <i>Offentlig kalender</i> → <i>Del lenke</i> → <i>Kopier</i>.</p>
+        <p><b>iPhone, kalender du abonnerer på</b> (for eksempel fra et byrå): Innstillinger → <i>Apper</i> → <i>Kalender</i> → <i>Kalenderkontoer</i> → <i>Abonnerte kalendere</i> → velg kalenderen → kopier adressen i <i>Tjener</i>.</p>
+        <p><b>Google Kalender:</b> På PC: Innstillinger → velg kalenderen → <i>Hemmelig adresse i iCal-format</i>.</p>
+        <p><b>Outlook:</b> Innstillinger → Kalender → <i>Delte kalendere</i> → <i>Publiser en kalender</i> → kopier ICS-lenken.</p>
+        <p class="small muted">En offentlig iCloud-kalender kan ses av alle som har lenken. Lag gjerne en egen kalender bare for vakter. Vaktbok lagrer lenken i kontoen din, og bare du kan se den.</p>
+      </details>
+    </div>
+
+    <div id="impCols" hidden>
+      <h3>Hvilke kolonner er hva?</h3>
+      <label class="check"><input type="checkbox" id="impHeader"> Første rad er overskrifter</label>
+      <div class="grid three" id="impColGrid"></div>
+    </div>
+
+    <div id="impPreview" hidden>
+      <div class="grid three">
+        <label>Vaktene gjelder<select id="impEmp"></select></label>
+        <label>Standardpause (min)<input type="number" id="impBreak" min="0" max="180" step="5" value="0" inputmode="numeric"></label>
+        <label id="impContainsL">Bare hendelser som inneholder<input type="text" id="impContains" maxlength="40" placeholder="F.eks. vakt"></label>
+        <label id="impFromL">Fra og med<input type="date" id="impFrom"></label>
+        <label id="impToL">Til og med<input type="date" id="impTo"></label>
+      </div>
+      <div id="impSummary" aria-live="polite"></div>
+      <div class="row" id="impAllNone"><button type="button" class="btn link" data-all="1">Velg alle</button><button type="button" class="btn link" data-all="0">Velg ingen</button></div>
+      <div class="imp-list" id="impList"></div>
+      <label class="check" id="impSaveL"><input type="checkbox" id="impSave" checked> Lagre lenken, så du kan hente nye vakter senere</label>
+    </div>
+
+    <ul class="errors" id="impErrors" role="alert"></ul>
     <div class="dialog-actions">
+      <button class="btn" type="button" id="impBack" hidden>Tilbake</button>
       <span class="spacer"></span>
       <button class="btn" type="button" data-close>Avbryt</button>
-      <button class="btn primary" type="submit" id="icsImportBtn">Importer</button>
+      <button class="btn primary" type="button" id="impNext" hidden>Hent kalender</button>
+      <button class="btn primary" type="submit" id="impGo" hidden>Importer</button>
     </div>
   </form>
 </dialog>

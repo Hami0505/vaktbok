@@ -107,3 +107,16 @@ test('sletting av arbeidsgiver fjerner vakter lokalt og på server', async () =>
   assert.equal(store.data.shifts.length, 0);
   assert.equal(sb.db.employers.size, 0); assert.equal(sb.db.shifts.size, 0);
 });
+
+test('kalenderlenke: krever innlogging og gir forståelige feilkoder', async () => {
+  const s2 = new Store({ supabaseUrl: 'x', supabaseAnonKey: 'y' });
+  await assert.rejects(() => s2.fetchCalendar('https://a.no/k.ics'), /login-required/);
+  s2.user = { id: 'u1' };
+  const reply = (data, error) => ({ functions: { invoke: async () => ({ data, error }) } });
+  s2.sb = reply({ text: 'BEGIN:VCALENDAR\r\nEND:VCALENDAR' }, null);
+  assert.match(await s2.fetchCalendar('webcal://a.no/k.ics'), /VCALENDAR/);
+  s2.sb = reply(null, { message: 'Edge Function returned a non-2xx status code', context: { status: 422, json: async () => ({ error: 'not-calendar' }) } });
+  await assert.rejects(() => s2.fetchCalendar('https://a.no'), /not-calendar/);
+  s2.sb = reply(null, { message: 'Function not found', context: { status: 404, json: async () => { throw new Error(); } } });
+  await assert.rejects(() => s2.fetchCalendar('https://a.no'), /no-function/);
+});

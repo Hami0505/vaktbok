@@ -1,9 +1,9 @@
 // Vaktbok – service worker: gjør appen tilgjengelig offline.
 // Øk VERSION ved hver utgivelse, så får brukerne beskjed om ny versjon.
-const VERSION = 'vaktbok-2026-10-27-1';
+const VERSION = 'vaktbok-2026-10-27-2';
 const SHELL = [
   './', 'index.html', 'personvern.html', 'css/app.css',
-  'js/app.js', 'js/logic.js', 'js/store.js', 'js/sync-core.js', 'js/demo.js', 'js/personvern.js', 'js/config.js',
+  'js/app.js', 'js/logic.js', 'js/store.js', 'js/sync-core.js', 'js/demo.js', 'js/personvern.js', 'js/importer.js', 'js/config.js',
   'manifest.webmanifest',
   'fonts/schibsted-grotesk-latin-400-normal.woff2', 'fonts/schibsted-grotesk-latin-500-normal.woff2',
   'fonts/schibsted-grotesk-latin-700-normal.woff2', 'fonts/schibsted-grotesk-latin-800-normal.woff2', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png',

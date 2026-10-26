@@ -299,3 +299,26 @@ body.show-landing .tabs, body.show-landing main, body.show-landing #banners { di
 .yearchart .col:hover .bar, .yearchart .col:focus-visible .bar { background: var(--ink); opacity: .75; }
 .yearinfo { margin: -8px 0 16px; min-height: 1.5em; font-size: .9rem; }
 .yearinfo b { color: var(--ink); }
+
+/* Importer vakter */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.sources { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
+@media (max-width: 560px) { .sources { grid-template-columns: 1fr; } }
+.source { text-align: left; font: inherit; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 14px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
+.source:hover { border-color: var(--accent); }
+.source b { font-size: 1.05rem; }
+.source span { color: var(--muted); font-size: .875rem; }
+#savedLinks h3, #impCols h3 { font-size: 1rem; margin: 18px 0 6px; }
+.saved-link { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 0; border-top: 1px solid var(--line); }
+.saved-link > div { flex: 1 1 180px; display: flex; flex-direction: column; }
+.howto { margin-top: 14px; font-size: .9rem; }
+.howto summary { cursor: pointer; font-weight: 700; }
+.howto p { margin: 8px 0; }
+.imp-list { max-height: 45vh; overflow: auto; border: 1px solid var(--line); border-radius: 10px; margin-top: 8px; }
+.imp-list:empty { display: none; }
+.imp-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; padding: 6px 10px; border-top: 1px solid var(--line); }
+.imp-row:first-child { border-top: 0; }
+.imp-row.off { opacity: .5; }
+.imp-row label.check { margin: 0; flex: 1 1 auto; min-width: 0; }
+.imp-row select { width: auto; max-width: 45%; min-height: 36px; padding: 4px 8px; font-size: .875rem; }
+#impSummary p { margin: 10px 0 0; }

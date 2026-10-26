@@ -3,6 +3,7 @@ import { config } from './config.js';
 import * as L from './logic.js';
 import { Store, newId } from './store.js';
 import { makeDemo } from './demo.js';
+import { setupImporter } from './importer.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -568,26 +569,6 @@ function renderAccount() {
 
 // ---------- Import og eksempeldata ----------
 
-function remapImport(data) {
-  if (data.app !== 'Vaktbok' || data.format !== 2) return L.migrateV1(data, newId); // prototypeformat
-  const idMap = new Map();
-  const employers = (data.employers || []).map(e => { const id = newId(); idMap.set(e.id, id); return { ...e, id, rules: (e.rules || []).map(r => ({ ...r, id: newId() })) }; })
-    .filter(e => !L.validateEmployer(e).length);
-  const shifts = (data.shifts || []).filter(s => idMap.has(s.employerId)).map(s => ({ ...s, id: newId(), employerId: idMap.get(s.employerId) }))
-    .filter(s => !L.validateShift(s, employers).length);
-  return { employers, shifts };
-}
-
-async function importData(data, label) {
-  const { employers, shifts } = remapImport(data);
-  if (!employers.length && !shifts.length) { toast('Fila er en Vaktbok-fil, men inneholder ingen arbeidsgivere eller vakter som kunne leses.'); return false; }
-  const ok = await confirmBox('Importere data?', `${label}: ${employers.length} arbeidsgivere og ${shifts.length} vakter legges til ved siden av det du har fra før.`, 'Importer');
-  if (!ok) return false;
-  store.addAll({ employers, shifts });
-  toast(`Importerte ${shifts.length} vakter`);
-  return true;
-}
-
 const DEMO_KEY = 'vaktbok:demo';
 const demoIds = () => { try { return JSON.parse(localStorage.getItem(DEMO_KEY) || '[]'); } catch { return []; } };
 // Eksempeldata kan lages på nytt så lenge alt som finnes, er eksempeldata.
@@ -630,6 +611,7 @@ function render() {
 }
 
 const actions = {
+  'go-login': () => { $('importDialog').close(); setTab('konto'); $('emailInput')?.focus(); },
   'go-settings': () => { setTab('konto'); $('sTax').focus(); },
   'landing-demo': () => { leaveLanding('uke'); loadDemo(); },
   'landing-start': () => { leaveLanding('arbeidsgivere'); openEmp(); },
@@ -646,7 +628,7 @@ const actions = {
   },
   'import-v1': async () => {
     const v1 = JSON.parse(localStorage.getItem(V1_KEY) || '{}');
-    if (await importData(v1, 'Fra prototypen')) localStorage.setItem(V1_DONE, '1');
+    if (await importer.importJson(v1, 'Fra prototypen')) localStorage.setItem(V1_DONE, '1');
     render();
   },
   'dismiss-v1': () => { localStorage.setItem(V1_DONE, '1'); render(); },
@@ -806,81 +788,6 @@ $('settingsForm').addEventListener('change', () => {
 });
 
 $('exportBtn').addEventListener('click', () => download(`vaktbok-data-${L.isoDate(new Date())}.json`, JSON.stringify(store.exportAll(), null, 2), 'application/json'));
-$('importFile').addEventListener('change', async ev => {
-  const f = ev.target.files[0]; ev.target.value = '';
-  if (!f) return;
-  if (f.size > 5e6) { toast('Fila er større enn 5 MB. Vaktbok- og kalenderfiler er vanligvis mye mindre, så sjekk at du valgte riktig fil.'); return; }
-  let text;
-  try { text = await f.text(); } catch { toast('Fila kunne ikke åpnes. Prøv å laste den ned på nytt.'); return; }
-  if (/BEGIN:VCALENDAR/.test(text)) { openIcsImport(text, f.name); return; }
-  let data;
-  try { data = JSON.parse(text); } catch { toast('Fila er verken en Vaktbok-fil (.json) eller en kalenderfil (.ics). Velg en fil lastet ned fra Vaktbok eller eksportert fra en kalender.'); return; }
-  await importData(data, f.name);
-});
-
-// ---------- Import fra kalender ----------
-
-function openIcsImport(text, name) {
-  let events;
-  try { events = L.parseICS(text); } catch { toast('Kalenderfila kunne ikke leses. Prøv å eksportere den på nytt fra kalenderen.'); return; }
-  if (!events.length) { toast('Kalenderfila inneholder ingen hendelser.'); return; }
-  if (!D().employers.length) { toast('Legg til arbeidsgiveren vaktene gjelder først. Deretter kan du importere kalenderen.'); setTab('arbeidsgivere'); openEmp(); return; }
-  ui.ics = events;
-  const timed = events.filter(e => e.start && !e.allDay).map(e => L.isoDate(e.start)).sort();
-  $('icsFound').textContent = `${name}: ${events.length} hendelser${timed.length ? `, fra ${fmtDay(timed[0])} til ${fmtDay(timed.at(-1))}` : '.'}`;
-  $('icsEmp').innerHTML = D().employers.filter(e => !e.archived).map(e => `<option value="${e.id}">${esc(e.name)}</option>`).join('')
-    + (D().employers.length > 1 ? '<option value="auto">Finn ut fra navnet i hendelsen</option>' : '');
-  const today = new Date();
-  $('icsFrom').value = L.isoDate(new Date(today.getFullYear(), today.getMonth() - 1, 1));
-  $('icsTo').value = L.isoDate(new Date(today.getFullYear(), today.getMonth() + 3, 0));
-  $('icsContains').value = '';
-  updateIcsPreview();
-  $('icsDialog').showModal();
-}
-
-function icsResult() {
-  const choice = $('icsEmp').value;
-  const emps = D().employers;
-  const employerFor = choice === 'auto'
-    ? sum => (emps.find(e => sum.toLowerCase().includes(e.name.toLowerCase())) || {}).id || null
-    : () => choice;
-  return L.icsToShifts(ui.ics || [], {
-    employerFor, from: $('icsFrom').value, to: $('icsTo').value, contains: $('icsContains').value.trim(),
-    existing: D().shifts, newId,
-  });
-}
-
-function updateIcsPreview() {
-  if ($('icsFrom').value && $('icsTo').value && $('icsTo').value < $('icsFrom').value) {
-    $('icsPreview').innerHTML = '<span class="flag block overlap">«Til og med» må være samme dag som «Fra og med» eller senere.</span>';
-    $('icsImportBtn').disabled = true; return;
-  }
-  const { shifts, skipped } = icsResult();
-  const why = [
-    [skipped.outside, 'utenfor perioden'], [skipped.filtered, 'uten teksten du søkte på'], [skipped.allDay, 'heldagshendelser'],
-    [skipped.duplicate, 'finnes allerede'], [skipped.noEmployer, 'uten kjent arbeidsgiver i navnet'],
-    [skipped.recurring, 'gjentakende hendelser (legg dem inn med «Gjenta» i stedet)'], [skipped.cancelled, 'avlyste'],
-    [skipped.invalid, 'uten gyldig start og slutt, eller lengre enn et døgn'],
-  ].filter(([n]) => n).map(([n, t]) => `${n} ${t}`);
-  $('icsPreview').innerHTML = `<b>${shifts.length} ${shifts.length === 1 ? 'vakt' : 'vakter'}</b> blir importert.`
-    + (why.length ? `<br><span class="muted">Hoppes over: ${esc(why.join(', '))}.</span>` : '')
-    + (shifts.length ? '<br><span class="muted">Pause settes til 0 minutter. Du kan endre hver vakt etterpå.</span>' : '');
-  $('icsImportBtn').disabled = !shifts.length;
-}
-
-$('icsForm').addEventListener('input', updateIcsPreview);
-$('icsForm').addEventListener('submit', ev => {
-  ev.preventDefault();
-  const { shifts } = icsResult();
-  if (!shifts.length) return;
-  store.addAll({ shifts });
-  $('icsDialog').close();
-  ui.ics = null;
-  ui.weekStart = L.mondayOf(L.parseDate(shifts[0].date));
-  setTab('uke');
-  toast(`Importerte ${shifts.length} ${shifts.length === 1 ? 'vakt' : 'vakter'} fra kalenderen`);
-});
-
 $('demoBtn').addEventListener('click', loadDemo);
 $('wipeBtn').addEventListener('click', async () => {
   if (!(await confirmBox('Slette alt?', 'Alle vakter og arbeidsgivere slettes for godt. Last ned en kopi først hvis du vil beholde dem.', 'Slett alt', true))) return;
@@ -913,6 +820,14 @@ store.addEventListener('guest-data', async ({ detail }) => {
   const ok = await confirmBox('Ta med vaktene fra denne enheten?', `Du har ${n} vakter lagret her fra før du logget inn. Vil du legge dem til i kontoen din?`, 'Legg til i kontoen');
   if (ok) { store.addAll({ employers: detail.employers || [], shifts: detail.shifts || [] }); store.clearGuestData(); toast('Vaktene er lagt til i kontoen'); }
 });
+
+// ---------- Import ----------
+const importer = setupImporter({
+  store, D, $, esc, toast, fmtDay, setTab, openEmp, newId, confirmBox, friendlyError,
+  goToWeek: date => { ui.weekStart = L.mondayOf(L.parseDate(date)); setTab('uke'); },
+});
+$('importBtn').addEventListener('click', () => importer.open());
+$('importBtn2').addEventListener('click', () => importer.open());
 
 // ---------- Oppstart ----------
 

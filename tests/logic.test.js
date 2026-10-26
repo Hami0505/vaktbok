@@ -312,7 +312,7 @@ test('kalenderfil: tolker tider, sammenbrettede linjer og escaping', () => {
   assert.equal(ev[0].start.getHours(), 22, '20:00 UTC = 22:00 norsk sommertid');
   assert.equal(ev[1].summary, 'Vakt, Kafé');
   assert.equal(ev[1].start.getHours(), 8, 'TZID tolkes som lokal tid');
-  assert.ok(ev[2].allDay); assert.ok(ev[3].recurring); assert.ok(ev[4].cancelled);
+  assert.ok(ev[2].allDay); assert.equal(ev[3].rrule, 'FREQ=WEEKLY'); assert.ok(ev[4].cancelled);
   assert.throws(() => L.parseICS('ikke en kalender'));
 });
 
@@ -323,10 +323,67 @@ test('kalenderfil blir vakter, med filtre og uten dubletter', () => {
   assert.equal(r.shifts.length, 2);
   const natt = r.shifts.find(s => s.employerId === 'e1');
   assert.deepEqual([natt.date, natt.start, natt.end], ['2026-10-23', '22:00', '07:30']);
-  assert.deepEqual(r.skipped, { allDay: 1, recurring: 1, cancelled: 1, invalid: 0, outside: 1, filtered: 0, noEmployer: 0, duplicate: 0 });
+  assert.deepEqual(r.skipped, { allDay: 1, unsupported: 0, cancelled: 1, invalid: 0, outside: 1, filtered: 0, noEmployer: 1, duplicate: 0 });
   const again = L.icsToShifts(L.parseICS(ICS), { employerFor: byName, from: '2026-10-01', to: '2026-10-31', existing: r.shifts, newId: id });
   assert.equal(again.shifts.length, 0); assert.equal(again.skipped.duplicate, 2);
   const filtered = L.icsToShifts(L.parseICS(ICS), { employerFor: () => 'e1', from: '2026-10-01', to: '2026-10-31', contains: 'natt', newId: id });
-  assert.equal(filtered.shifts.length, 1); assert.equal(filtered.skipped.filtered, 1);
+  assert.equal(filtered.shifts.length, 1); assert.equal(filtered.skipped.filtered, 2, "Kafé og den gjentakende Fast vakt");
   for (const s of r.shifts) assert.deepEqual(L.validateShift(s, [emp, emp2]), []);
+});
+
+
+const cal = (...events) => ['BEGIN:VCALENDAR', 'VERSION:2.0', ...events.flatMap(e => ['BEGIN:VEVENT', ...e, 'END:VEVENT']), 'END:VCALENDAR'].join('\r\n');
+
+test('gjentakende vakter i kalenderen blir enkeltvakter', () => {
+  let n = 0; const id = () => `r${++n}`;
+  const ics = cal(
+    ['UID:w', 'DTSTART;TZID=Europe/Oslo:20261006T150000', 'DTEND;TZID=Europe/Oslo:20261006T220000', 'RRULE:FREQ=WEEKLY;BYDAY=TU,TH', 'EXDATE;TZID=Europe/Oslo:20261015T150000', 'SUMMARY:Kveld'],
+    ['UID:w', 'RECURRENCE-ID;TZID=Europe/Oslo:20261020T150000', 'DTSTART;TZID=Europe/Oslo:20261020T160000', 'DTEND;TZID=Europe/Oslo:20261020T230000', 'SUMMARY:Kveld (flyttet)'],
+    ['UID:c', 'DTSTART:20261001T080000', 'DTEND:20261001T160000', 'RRULE:FREQ=DAILY;INTERVAL=7;COUNT=3', 'SUMMARY:Dag'],
+    ['UID:m', 'DTSTART:20261002T080000', 'DTEND:20261002T160000', 'RRULE:FREQ=MONTHLY', 'SUMMARY:Månedlig'],
+  );
+  const r = L.icsToShifts(L.parseICS(ics), { employerFor: () => 'e1', from: '2026-10-01', to: '2026-10-31', newId: id, breakMin: 30 });
+  const list = r.shifts.map(s => `${s.date} ${s.start}`);
+  // tir/tor fra 6.10: 6, 8, 13, (15 unntatt), 20 flyttet til 16:00, 22, 27, 29
+  for (const d of ['2026-10-06 15:00', '2026-10-08 15:00', '2026-10-13 15:00', '2026-10-20 16:00', '2026-10-22 15:00', '2026-10-27 15:00', '2026-10-29 15:00']) assert.ok(list.includes(d), d);
+  assert.ok(!list.includes('2026-10-15 15:00'), 'EXDATE');
+  assert.ok(!list.includes('2026-10-20 15:00'), 'erstattet av flyttet forekomst');
+  // daglig hver 7. dag, 3 ganger: 1., 8., 15.
+  for (const d of ['2026-10-01 08:00', '2026-10-08 08:00', '2026-10-15 08:00']) assert.ok(list.includes(d), d);
+  assert.ok(!list.includes('2026-10-22 08:00'), 'COUNT=3');
+  assert.equal(r.skipped.unsupported, 1);
+  assert.ok(r.shifts.every(s => s.breakMin === 30), 'standardpause');
+  assert.ok(r.shifts.find(s => s.date === '2026-10-26') === undefined);
+  // vintertid etter 25.10: fortsatt 15:00 lokal tid
+  assert.equal(r.shifts.find(s => s.date === '2026-10-27').start, '15:00');
+});
+
+test('gjentakelse med UNTIL stopper riktig', () => {
+  let n = 0; const id = () => `u${++n}`;
+  const ics = cal(['UID:x', 'DTSTART:20261005T080000', 'DTEND:20261005T120000', 'RRULE:FREQ=WEEKLY;UNTIL=20261019T235959Z', 'SUMMARY:Morgen']);
+  const r = L.icsToShifts(L.parseICS(ics), { employerFor: () => 'e1', from: '2026-10-01', to: '2026-12-31', newId: id });
+  assert.deepEqual(r.shifts.map(s => s.date), ['2026-10-05', '2026-10-12', '2026-10-19']);
+});
+
+test('regneark: Vaktboks egen eksport kan leses inn igjen', () => {
+  const shifts = [S({ date: '2026-10-21', start: '08:00', end: '16:00', breakMin: 30, note: 'Avd 2' }), S({ employerId: 'e2', date: '2026-10-23', start: '22:00', end: '07:00' })];
+  const rows = L.parseCSV(L.toCSV(shifts, [emp, emp2], '2026-10'));
+  const cols = L.guessColumns(rows[0]);
+  assert.deepEqual([cols.date, cols.start, cols.end, cols.breakMin, cols.employer], [0, 2, 3, 4, 1]);
+  let n = 0;
+  const r = L.csvToShifts(rows.slice(1), cols, { employerFor: name => ({ A: 'e1', B: 'e2' })[name] || null, newId: () => `c${++n}` });
+  assert.equal(r.shifts.length, 2);
+  assert.deepEqual([r.shifts[0].date, r.shifts[0].start, r.shifts[0].end, r.shifts[0].breakMin, r.shifts[0].note], ['2026-10-21', '08:00', '16:00', 30, 'Avd 2']);
+  assert.equal(r.shifts[1].employerId, 'e2');
+  const again = L.csvToShifts(rows.slice(1), cols, { employerFor: name => ({ A: 'e1', B: 'e2' })[name] || null, existing: r.shifts, newId: () => `d${++n}` });
+  assert.equal(again.skipped.duplicate, 2);
+});
+
+test('regneark: norske datoer, komma som skilletegn og ugyldige rader', () => {
+  const rows = L.parseCSV('Dato,Fra,Til,Pause\n27.10.2026,8.00,16:00,30\n28/10/26,15:00,22:30,\n"ikke dato",x,y,\n');
+  const cols = L.guessColumns(rows[0]);
+  const r = L.csvToShifts(rows.slice(1), cols, { employerFor: () => null, defaultEmployerId: 'e1', newId: () => Math.random().toString(36), breakMin: 15 });
+  assert.deepEqual(r.shifts.map(s => [s.date, s.start, s.end, s.breakMin]), [['2026-10-27', '08:00', '16:00', 30], ['2026-10-28', '15:00', '22:30', 15]]);
+  assert.equal(r.skipped.invalid, 1);
+  assert.equal(L.normTime('24:00'), '00:00'); assert.equal(L.normDate('1.2.2027'), '2027-02-01'); assert.equal(L.normTime('25:00'), null);
 });

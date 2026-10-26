@@ -268,6 +268,20 @@ export class Store extends EventTarget {
 
   // ---------- Konto ----------
 
+  // Henter en kalender via serverfunksjonen ics-proxy (supabase/functions/ics-proxy). Krever innlogging.
+  async fetchCalendar(url) {
+    if (!this.sb || !this.user) throw new Error('login-required');
+    const { data, error } = await this.sb.functions.invoke('ics-proxy', { body: { url } });
+    if (error) {
+      let code = 'failed';
+      try { code = (await error.context.json()).error || code; } catch { if (/not found|404/i.test(error.message)) code = 'no-function'; }
+      if (error.context && error.context.status === 404) code = 'no-function';
+      throw new Error(code);
+    }
+    if (!data || typeof data.text !== 'string') throw new Error('failed');
+    return data.text;
+  }
+
   async sendCode(email) {
     const redirect = location.origin + location.pathname;
     const { error } = await this.sb.auth.signInWithOtp({ email, options: { emailRedirectTo: redirect, shouldCreateUser: true } });
