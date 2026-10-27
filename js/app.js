@@ -748,36 +748,55 @@ function renderYear(y) {
     + '</tbody>' : '';
 }
 
-function printTimesheet() {
+// Samler timelista for valgt arbeidsgiver (eller alle) i måneden som vises.
+function timesheetData() {
   const choice = $('sheetEmp').value || Object.keys(L.monthSummary(D().shifts, D().employers, ui.month).byEmp)[0];
-  if (!choice) return;
+  if (!choice) return null;
   const all = L.calcAll(D().shifts, D().employers);
   const month = L.shiftsInMonth(D().shifts, ui.month);
   const ids = choice === 'all' ? [...new Set(month.map(s => s.employerId))] : [choice];
   const [y, m] = ui.month.split('-').map(Number);
   let grand = 0, count = 0;
-  const tables = ids.map(id => {
-    const emp = empById(id), list = month.filter(s => s.employerId === id);
+  const groups = ids.map(id => {
+    const list = month.filter(s => s.employerId === id);
     let sum = 0;
     const rows = list.map(s => { const c = all.get(s.id); sum += c.hours; const d = L.parseDate(s.date);
-      return `<tr><td>${DAY[d.getDay()]} ${d.getDate()}.${d.getMonth() + 1}.</td><td>${s.start}</td><td>${s.end}</td><td>${s.breakMin || 0} min</td><td>${num(c.hours, 2)}</td></tr>`; }).join('');
+      return { day: `${DAY[d.getDay()]} ${d.getDate()}.${d.getMonth() + 1}.`, start: s.start, end: s.end, brk: `${s.breakMin || 0} min`, hours: num(c.hours, 2) }; });
     grand += sum; count += list.length;
-    return `${ids.length > 1 ? `<h2>${esc(emp?.name || '')}</h2>` : ''}
-      <table><thead><tr><th>Dato</th><th>Start</th><th>Slutt</th><th>Pause</th><th>Timer</th></tr></thead>
-      <tbody>${rows}</tbody><tfoot><tr><td colspan="4"><b>Sum (${list.length} vakter)</b></td><td><b>${num(sum, 2)}</b></td></tr></tfoot></table>`;
-  }).join('');
-  const single = ids.length === 1 ? empById(ids[0]) : null;
-  $('printArea').innerHTML = `
-    <h1>Timeliste</h1>
-    <p><b>Arbeidsgiver:</b> ${single ? esc(single.name) : 'Alle arbeidsgivere'}<br><b>Periode:</b> ${MONTH[m - 1]} ${y}<br><b>Navn:</b> ______________________________</p>
-    ${tables}
-    ${ids.length > 1 ? `<p><b>Totalt: ${num(grand, 2)} timer (${count} vakter)</b></p>` : ''}
-    <div class="sign"><div>Dato og signatur, arbeidstaker</div>${single ? '<div>Dato og signatur, arbeidsgiver</div>' : ''}</div>
-    <p style="font-size:8pt;color:#555">Laget med Vaktbok. Timer er etter ubetalt pause.</p>`;
+    return { name: empById(id)?.name || '', rows, sum: num(sum, 2), count: list.length };
+  });
+  const single = ids.length === 1;
+  return { single, employer: single ? empById(ids[0])?.name || '' : 'Alle arbeidsgivere', period: `${MONTH[m - 1]} ${y}`,
+    groups, total: num(grand, 2), count, file: `timeliste-${ui.month}-${single ? (empById(ids[0])?.name || 'arbeidsgiver') : 'alle'}.pdf`.replace(/[^\wæøåÆØÅ.-]+/g, '-') };
+}
+
+async function pdfTimesheet() {
+  const data = timesheetData(); if (!data) return;
+  const btn = $('pdfBtn'); btn.disabled = true; const label = btn.textContent; btn.textContent = 'Lager PDF …';
+  try {
+    const { loadJsPDF, buildTimesheetPdf, deliverFile } = await import('./pdf.js');
+    const JsPDF = await loadJsPDF();
+    const res = await deliverFile(buildTimesheetPdf(JsPDF, data), data.file);
+    if (res === 'downloaded') toast('Timelista er lastet ned som PDF');
+  } catch (e) {
+    console.warn(e);
+    printTimesheet(data); // reserve: nettleserens utskrift, hvis PDF-biblioteket ikke kan lastes
+  } finally { btn.disabled = false; btn.textContent = label; }
+}
+
+function printTimesheet(data) {
+  const tables = data.groups.map(g => `${data.single ? '' : `<h2>${esc(g.name)}</h2>`}
+    <table><thead><tr><th>Dato</th><th>Start</th><th>Slutt</th><th>Pause</th><th>Timer</th></tr></thead>
+    <tbody>${g.rows.map(r => `<tr><td>${r.day}</td><td>${r.start}</td><td>${r.end}</td><td>${r.brk}</td><td>${r.hours}</td></tr>`).join('')}</tbody>
+    <tfoot><tr><td colspan="4"><b>Sum (${g.count} vakter)</b></td><td><b>${g.sum}</b></td></tr></tfoot></table>`).join('');
+  $('printArea').innerHTML = `<h1>Timeliste</h1>
+    <p><b>Arbeidsgiver:</b> ${esc(data.employer)}<br><b>Periode:</b> ${data.period}<br><b>Navn:</b> ______________________________</p>
+    ${tables}${data.single ? '' : `<p><b>Totalt: ${data.total} timer (${data.count} vakter)</b></p>`}
+    <div class="sign"><div>Dato og signatur, arbeidstaker</div>${data.single ? '<div>Dato og signatur, arbeidsgiver</div>' : ''}</div>`;
   document.body.classList.add('printing');
   const done = () => { document.body.classList.remove('printing'); removeEventListener('afterprint', done); };
   addEventListener('afterprint', done);
-  print();
+  try { print(); } catch { done(); toast('Utskrift er ikke tilgjengelig her. Prøv igjen når du er på nett.'); }
 }
 
 function renderPayslips(byEmp, allIds) {
@@ -967,7 +986,7 @@ $('fDate').addEventListener('change', () => {
   updateRepeatUI();
 });
 $('fRepDays').addEventListener('change', () => { ui.repDaysTouched = true; });
-$('pdfBtn').addEventListener('click', printTimesheet);
+$('pdfBtn').addEventListener('click', pdfTimesheet);
 $('prevWeek').addEventListener('click', () => { ui.weekStart = addDays(ui.weekStart, -7); renderWeek(); });
 $('nextWeek').addEventListener('click', () => { ui.weekStart = addDays(ui.weekStart, 7); renderWeek(); });
 $('todayBtn').addEventListener('click', () => { ui.weekStart = L.mondayOf(new Date()); renderWeek(); });
@@ -1166,6 +1185,7 @@ function openNameDialog(required) {
   $('nameInput').value = store.profile?.display_name || '';
   $('nameErrors').innerHTML = '';
   $('nameCancel').hidden = required;
+  $('nameDialog').querySelector('.dlg-x').hidden = required;
   d.dataset.required = required ? '1' : '';
   d.showModal();
   $('nameInput').focus();
@@ -1212,6 +1232,12 @@ async function registerSW() {
     let reloaded = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (ui.updating && !reloaded) { reloaded = true; location.reload(); } });
   } catch (e) { console.warn('Service worker feilet', e); }
+}
+
+// Lukkeknapp (×) øverst i alle vinduer.
+for (const d of document.querySelectorAll('dialog')) {
+  const form = d.querySelector('form') || d;
+  form.insertAdjacentHTML('afterbegin', '<button type="button" class="dlg-x" data-close aria-label="Lukk">×</button>');
 }
 
 const initialHash = location.hash;

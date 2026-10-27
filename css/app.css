@@ -486,3 +486,30 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 #netNote, #netHelp { margin: 6px 0 0; }
 .item.shift .who { gap: 0; }
 .item.shift .who .dot { margin-right: 6px; }
+
+/* ---------- Vinduer på mobil: aldri bredere enn skjermen ---------- */
+/* fieldset krymper ikke under innholdet sitt som standard, og grid-kolonner med 1fr heller ikke. */
+fieldset { min-width: 0; min-inline-size: 0; }
+dialog .grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+dialog .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.rule { grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr) minmax(0, 1fr) auto; }
+dialog { overflow-x: hidden; max-width: calc(100vw - 24px); }
+@media (max-width: 560px) {
+  dialog { width: 100%; max-width: 100%; inset-inline: 0; margin: auto 0 0;
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 8px); }
+  dialog .grid.three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rule { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .group-emp { width: 100%; }
+}
+/* iPhone zoomer inn i felt med tekst mindre enn 16 px, og zoomer ikke ut igjen. */
+@media (max-width: 640px) { input, select, textarea { font-size: 16px !important; } }
+
+/* ---------- Lukkeknapp øverst i vinduer ---------- */
+.dlg-x { position: sticky; top: 0; float: right; z-index: 3; width: 40px; height: 40px; margin: -6px -6px 6px 10px;
+  border-radius: 50%; border: 1px solid var(--control); background: var(--card); color: var(--ink);
+  font: inherit; font-size: 1.5rem; line-height: 1; cursor: pointer; display: grid; place-items: center; }
+.dlg-x:hover { border-color: var(--ink); }
+@media (max-width: 560px) { dialog.wide { width: 100%; max-width: 100%; } }
+.paytype .seg { display: flex; width: 100%; }
+.paytype .seg button { flex: 1; padding: 6px 6px; }
+.slip { grid-template-columns: minmax(0, 1fr) minmax(110px, 150px); }
