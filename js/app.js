@@ -2,8 +2,6 @@
 import { config } from './config.js';
 import * as L from './logic.js';
 import { Store, newId } from './store.js';
-import { makeDemo } from './demo.js';
-import { setupImporter } from './importer.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -20,9 +18,12 @@ const V1_KEY = 'vaktbok-v1', V1_DONE = 'vaktbok:v1-handled';
 const ym = d => `${d.getFullYear()}-${L.pad(d.getMonth() + 1)}`;
 const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
 const safeColor = c => /^#[0-9a-f]{6}$/i.test(c || '') ? c : '#1F6F6B';
+// Svart eller hvit tekst på en farge: velg den som gir høyest kontrast etter WCAG-formelen.
 const fgFor = hex => {
-  const n = parseInt(safeColor(hex).slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
-  return (0.299 * r + 0.587 * g + 0.114 * b) > 160 ? '#17252E' : '#FFFFFF';
+  const n = parseInt(safeColor(hex).slice(1), 16);
+  const lin = c => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  const L = 0.2126 * lin(n >> 16) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
+  return (L + 0.05) / 0.05 >= 1.05 / (L + 0.05) ? '#17252E' : '#FFFFFF';
 };
 const fmtDay = str => { const d = L.parseDate(str); return `${DAY[d.getDay()]} ${d.getDate()}.${d.getMonth() + 1}.`; };
 
@@ -896,7 +897,8 @@ const demoIds = () => { try { return JSON.parse(localStorage.getItem(DEMO_KEY) |
 // Eksempeldata kan lages på nytt så lenge alt som finnes, er eksempeldata.
 const onlyDemo = () => { const ids = new Set(demoIds()); return D().employers.every(e => ids.has(e.id)); };
 
-function loadDemo() {
+async function loadDemo() {
+  const { makeDemo } = await import('./demo.js');
   const old = new Set(demoIds());
   for (const e of D().employers.filter(e => old.has(e.id))) store.deleteEmployer(e.id);
   const { employers, shifts } = makeDemo({ newId });
@@ -956,7 +958,7 @@ const actions = {
   },
   'import-v1': async () => {
     const v1 = JSON.parse(localStorage.getItem(V1_KEY) || '{}');
-    if (await importer.importJson(v1, 'Fra prototypen')) localStorage.setItem(V1_DONE, '1');
+    if (await (await getImporter()).importJson(v1, 'Fra prototypen')) localStorage.setItem(V1_DONE, '1');
     render();
   },
   'dismiss-v1': () => { localStorage.setItem(V1_DONE, '1'); render(); },
@@ -1232,12 +1234,14 @@ store.addEventListener('profile', () => {
 });
 
 // ---------- Import ----------
-const importer = setupImporter({
+// Importen lastes først når den trengs, så oppstarten blir raskere.
+let importerP = null;
+const getImporter = () => importerP ||= import('./importer.js').then(({ setupImporter }) => setupImporter({
   store, D, $, esc, toast, fmtDay, setTab, openEmp, newId, confirmBox, friendlyError,
   goToWeek: date => { ui.weekStart = L.mondayOf(L.parseDate(date)); setTab('uke'); },
-});
-$('importBtn').addEventListener('click', () => importer.open());
-$('importBtn2').addEventListener('click', () => importer.open());
+}));
+$('importBtn').addEventListener('click', async () => (await getImporter()).open());
+$('importBtn2').addEventListener('click', async () => (await getImporter()).open());
 
 // ---------- Oppstart ----------
 
@@ -1285,7 +1289,11 @@ const hashTab = location.hash.slice(1) === 'maned' ? 'oversikt' : location.hash.
 const start = ['uke', 'oversikt', 'arbeidsgivere', 'konto'].includes(hashTab) ? hashTab : 'uke';
 setTab(start);
 if (initialHash === '#om') showLanding(true);
+// Ny besøkende: ingen lokale data, ingen innlogging lagret og aldri vært innom. Vis landingssiden med en gang,
+// så siden ikke først tegner en tom uke og så hopper.
+else if (!initialHash && !localStorage.getItem(WELCOME_KEY) && !Object.keys(localStorage).some(k => k.startsWith('sb-') || k.startsWith('vaktbok:data:'))) showLanding(true);
 store.init().then(() => {
+  if (store.user && ui.landing && initialHash !== '#om') showLanding(false);
   if (store.user) {
     const once = () => { if (store.status === 'synced') { store.removeEventListener('status', once); extendSeries(); store.loadProfile(); } };
     store.addEventListener('status', once); once();

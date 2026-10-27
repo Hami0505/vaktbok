@@ -569,3 +569,5 @@ input.switch:checked::after { transform: translateX(18px); }
   #v-uke:not([hidden]), #ovMonth:not([hidden]) { grid-template-rows: auto auto 1fr; }
   #v-uke > .actionbar { align-self: start; }
 }
+/* Bunnteksten starter under skjermkanten, så den ikke hopper når innholdet lastes. */
+main, .landing:not([hidden]) { min-height: 100vh; }
