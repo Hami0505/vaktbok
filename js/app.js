@@ -183,15 +183,24 @@ function renderWeek() {
   let html = '';
   for (let i = 0; i < 7; i++) {
     const day = addDays(ws, i), ds = L.isoDate(day), hol = L.holidayName(ds);
-    const bars = near.map(s => {
-      const seg = segment(s, day); if (!seg) return '';
+    // Vakter som overlapper samme dag, legges i hvert sitt spor i stedet for oppå hverandre.
+    const segs = near.map(s => ({ s, seg: segment(s, day) })).filter(x => x.seg).sort((x, y) => x.seg.left - y.seg.left);
+    const laneEnd = [];
+    for (const x of segs) {
+      let lane = laneEnd.findIndex(end => end <= x.seg.left + 0.01);
+      if (lane < 0) lane = laneEnd.length;
+      laneEnd[lane] = x.seg.left + x.seg.width; x.lane = lane;
+    }
+    const lanes = Math.max(1, laneEnd.length);
+    const bars = segs.map(({ s, seg, lane }) => {
       const emp = empById(s.employerId), c = safeColor(emp?.color), name = emp ? emp.name : '?';
-      return `<button class="bar${warns[s.id] ? ' warn' : ''}" data-action="edit-shift" data-id="${s.id}"
-        style="left:${seg.left}%;width:${seg.width}%;background:${c};color:${fgFor(c)}"
-        aria-label="${esc(name)}, ${DAY_LONG[day.getDay()]} ${s.start}–${s.end}${warns[s.id] ? ', har varsel' : ''}" title="${esc(name)} ${s.start}–${s.end}">${seg.width > 22 ? esc(name) : seg.width > 13 ? (seg.left < 1 ? `–${s.end}` : s.start) : ''}</button>`;
+      const time = seg.left < 1 && s.end <= s.start ? `–${s.end}` : s.start;
+      return `<button class="bar${warns[s.id] ? ' warn' : ''}${lanes > 1 ? ' laned' : ''}" data-action="edit-shift" data-id="${s.id}"
+        style="left:${seg.left}%;width:${seg.width}%;top:calc(${lane * 100 / lanes}% + 3px);height:calc(${100 / lanes}% - 6px);background:${c};color:${fgFor(c)}"
+        aria-label="${esc(name)}, ${DAY_LONG[day.getDay()]} ${s.start}–${s.end}${warns[s.id] ? ', overlapper eller har kort hvile' : ''}" title="${esc(name)} ${s.start}–${s.end}">${seg.width > 6 ? `<span class="t">${time}</span><span class="n">${esc(name)}</span>` : ''}</button>`;
     }).join('');
     html += `<div class="d${ds === today ? ' today' : ''}${hol ? ' holiday' : ''}">${DAY[day.getDay()]} ${day.getDate()}.<small>${esc(hol || MONTH[day.getMonth()].slice(0, 3))}</small></div>
-      <div class="track">${bars}</div>`;
+      <div class="track"${lanes > 1 ? ` style="height:${lanes * 26 + 6}px"` : ''}>${bars}</div>`;
   }
   html += '<div></div><div class="ticks" aria-hidden="true"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>';
   $('week').innerHTML = html;
@@ -773,13 +782,26 @@ function timesheetData() {
 async function pdfTimesheet() {
   const data = timesheetData(); if (!data) return;
   const btn = $('pdfBtn'); btn.disabled = true; const label = btn.textContent; btn.textContent = 'Lager PDF …';
+  // På PC åpnes PDF-en i en ny fane, så du ser den før du laster ned. Fanen må åpnes med en gang du trykker,
+  // ellers blokkerer nettleseren den. På mobil brukes delingsarket, som har egen forhåndsvisning.
+  const touch = matchMedia('(pointer: coarse)').matches;
+  const win = touch ? null : window.open('', '_blank');
   try {
     const { loadJsPDF, buildTimesheetPdf, deliverFile } = await import('./pdf.js');
     const JsPDF = await loadJsPDF();
-    const res = await deliverFile(buildTimesheetPdf(JsPDF, data), data.file);
-    if (res === 'downloaded') toast('Timelista er lastet ned som PDF');
+    const blob = buildTimesheetPdf(JsPDF, data);
+    if (win) {
+      const url = URL.createObjectURL(new File([blob], data.file, { type: 'application/pdf' }));
+      win.opener = null; win.location.href = url;
+      setTimeout(() => URL.revokeObjectURL(url), 120000);
+      toast('Timelista er åpnet i en ny fane. Last den ned eller skriv den ut derfra.');
+    } else {
+      const res = await deliverFile(blob, data.file);
+      if (res === 'downloaded') toast('Timelista er lastet ned som PDF');
+    }
   } catch (e) {
     console.warn(e);
+    win?.close();
     printTimesheet(data); // reserve: nettleserens utskrift, hvis PDF-biblioteket ikke kan lastes
   } finally { btn.disabled = false; btn.textContent = label; }
 }
@@ -1233,6 +1255,24 @@ async function registerSW() {
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (ui.updating && !reloaded) { reloaded = true; location.reload(); } });
   } catch (e) { console.warn('Service worker feilet', e); }
 }
+
+// Lås siden bak mens et vindu er åpent. Ellers tar iPhone over og scroller bakgrunnen
+// når du når slutten av vinduet, særlig i appen på hjemskjermen.
+let openModals = 0, savedScroll = 0;
+const nativeShowModal = HTMLDialogElement.prototype.showModal;
+HTMLDialogElement.prototype.showModal = function () {
+  nativeShowModal.call(this);
+  if (openModals++ === 0) {
+    savedScroll = window.scrollY;
+    Object.assign(document.body.style, { position: 'fixed', top: `-${savedScroll}px`, left: '0', right: '0', width: '100%' });
+  }
+  this.addEventListener('close', () => {
+    if (--openModals > 0) return;
+    openModals = 0;
+    Object.assign(document.body.style, { position: '', top: '', left: '', right: '', width: '' });
+    window.scrollTo(0, savedScroll);
+  }, { once: true });
+};
 
 // Lukkeknapp (×) øverst i alle vinduer.
 for (const d of document.querySelectorAll('dialog')) {

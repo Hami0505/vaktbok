@@ -513,3 +513,59 @@ dialog { overflow-x: hidden; max-width: calc(100vw - 24px); }
 .paytype .seg { display: flex; width: 100%; }
 .paytype .seg button { flex: 1; padding: 6px 6px; }
 .slip { grid-template-columns: minmax(0, 1fr) minmax(110px, 150px); }
+
+/* ---------- Stolper: tid og navn, egne spor ved overlapp ---------- */
+.track .bar { bottom: auto; display: flex; align-items: center; gap: 0; padding: 0 6px; line-height: 1.1; text-overflow: ellipsis; }
+.track .bar .t { font-variant-numeric: tabular-nums; flex: none; }
+.track .bar .n { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.track .bar.laned { font-size: .68rem; }
+/* Varsel som et lite merke i hjørnet, ikke en kant som ser ut som en egen stolpe */
+.track .bar.warn { box-shadow: none; }
+.track .bar.warn::after { content: '!'; position: absolute; right: 3px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; border-radius: 50%;
+  background: var(--warn-bg); color: var(--warn); font-size: .65rem; font-weight: 800; display: grid; place-items: center; }
+.track .bar.warn { padding-right: 20px; }
+.tabs button:focus-visible { outline-offset: -2px; border-radius: 4px; }
+dialog { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+
+/* ---------- Innstillinger som rader: navn og forklaring til venstre, felt til høyre ---------- */
+.settings { max-width: 720px; }
+.set-head { font-size: .8rem; font-weight: 700; color: var(--muted); letter-spacing: .02em; margin: 22px 0 2px; }
+.set-head:first-child { margin-top: 4px; }
+.set-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(130px, 190px); gap: 6px 20px; align-items: center; padding: 14px 0; border-top: 1px solid var(--line); }
+.set-row label { display: block; font-size: 1rem; font-weight: 600; }
+.set-row .help { margin: 2px 0 0; }
+.set-row > select, .set-row > .unit { justify-self: end; width: 100%; }
+.set-row > input[type="checkbox"] { justify-self: end; }
+.unit { display: flex; align-items: center; gap: 8px; }
+.unit input { text-align: right; }
+.unit span { color: var(--muted); font-size: .9rem; min-width: 34px; }
+/* Bryter i stedet for avkrysningsboks */
+input.switch { appearance: none; -webkit-appearance: none; width: 46px; height: 28px; min-height: 28px; border-radius: 999px; position: relative; cursor: pointer;
+  background: var(--line); border: 1px solid var(--control); transition: background .15s; }
+input.switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; border-radius: 50%; background: var(--card); box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .15s; }
+input.switch:checked { background: var(--accent); border-color: var(--accent); }
+input.switch:checked::after { transform: translateX(18px); }
+@media (max-width: 420px) { .set-row { grid-template-columns: minmax(0, 1fr) minmax(110px, 140px); } }
+
+/* ---------- Store skjermer: bruk bredden ---------- */
+@media (min-width: 1100px) {
+  .wrap { max-width: 1180px; padding-left: 32px; padding-right: 32px; }
+  /* Uke: stripa og summen til venstre, vaktlista til høyre */
+  #v-uke:not([hidden]) { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(320px, 1fr); column-gap: 44px; align-items: start; }
+  #v-uke > .week-panel, #v-uke > .weeksum, #v-uke > .actionbar { grid-column: 1; }
+  #v-uke > .panel:last-child { grid-column: 2; grid-row: 1 / span 3; border-top: 0; padding-top: 10px; }
+  /* Oversikt, måned: tall og tabell til venstre, varsler, lønnsslipp og eksport til høyre */
+  #ovMonth:not([hidden]) { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(320px, 1fr); column-gap: 44px; align-items: start; }
+  #ovMonth > .panel:first-child { grid-column: 1; grid-row: 1 / span 3; }
+  #ovMonth > .panel:not(:first-child) { grid-column: 2; }
+  #ovMonth > .panel:nth-child(2) { border-top: 0; padding-top: 10px; }
+  /* Arbeidsgivere i to kolonner */
+  #empList { display: grid; grid-template-columns: 1fr 1fr; column-gap: 40px; }
+  #empList .item:nth-child(2) { border-top: 0; }
+}
+.track .bar .n { margin-left: 6px; }
+.track .bar.laned { font-size: .72rem; }
+@media (min-width: 1100px) {
+  #v-uke:not([hidden]), #ovMonth:not([hidden]) { grid-template-rows: auto auto 1fr; }
+  #v-uke > .actionbar { align-self: start; }
+}

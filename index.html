@@ -191,28 +191,53 @@
 
       <section class="panel">
         <h2>Innstillinger</h2>
-        <form id="settingsForm" class="grid">
-          <label>Feriepenger
+        <form id="settingsForm" class="settings">
+          <h3 class="set-head">Lønn og skatt</h3>
+          <div class="set-row">
+            <div><label for="sHoliday">Feriepenger</label><p class="help">10,2 % er vanlig. 12 % hvis du har fem ukers ferie.</p></div>
             <select id="sHoliday">
-              <option value="10.2">10,2 % (vanlig)</option>
-              <option value="12">12 % (5 ukers ferie)</option>
+              <option value="10.2">10,2 %</option>
+              <option value="12">12 %</option>
             </select>
-          </label>
-          <label>Minste hviletid mellom vakter (timer)<input type="number" id="sRest" min="0" max="24" step="0.5" inputmode="decimal"></label>
-          <label>Varsle når uka passerer (timer)<input type="number" id="sWeek" min="1" max="168" step="1" inputmode="numeric"></label>
-          <label>Standard skattetrekk (%)<input type="number" id="sTax" min="0" max="60" step="0.5" inputmode="decimal" placeholder="F.eks. 30" aria-describedby="taxHelp">
-            <span class="help" id="taxHelp">Brukes for arbeidsgivere uten eget valg. Du kan sette prosent- eller tabelltrekk per arbeidsgiver.</span></label>
-          <fieldset class="span-all frikort-box">
-            <legend>Frikort</legend>
-            <label class="check"><input type="checkbox" id="sFkOn"> Jeg har frikort i år</label>
-            <div class="grid" id="sFkFields" hidden>
-              <label>Grense (kr)<input type="number" id="sFkLimit" min="0" step="1000" inputmode="numeric" placeholder="100000"></label>
-              <label>Inntekt i år utenfor Vaktbok (kr)<input type="number" id="sFkOther" min="0" step="100" inputmode="numeric" placeholder="0" aria-describedby="fkHelp">
-                <span class="help" id="fkHelp">Lønn før du begynte med Vaktbok, og feriepenger som utbetales i år. Begge teller mot frikortet.</span></label>
-              <label class="check span-all"><input type="checkbox" id="sFkNew"> Jeg har bestilt skattekort for inntekt over grensen</label>
-              <label id="sFkNewBox" hidden>Prosent på det nye skattekortet<input type="number" id="sFkNewPct" min="0" max="60" step="0.5" inputmode="decimal"></label>
+          </div>
+          <div class="set-row">
+            <div><label for="sTax">Standard skattetrekk</label><p class="help" id="taxHelp">Brukes for arbeidsgivere uten eget valg. Prosent- eller tabelltrekk kan settes per arbeidsgiver.</p></div>
+            <div class="unit"><input type="number" id="sTax" min="0" max="60" step="0.5" inputmode="decimal" placeholder="0" aria-describedby="taxHelp"><span>%</span></div>
+          </div>
+
+          <h3 class="set-head">Varsler</h3>
+          <div class="set-row">
+            <div><label for="sRest">Minste hviletid mellom vakter</label><p class="help">Arbeidsmiljøloven bruker 11 timer som hovedregel.</p></div>
+            <div class="unit"><input type="number" id="sRest" min="0" max="24" step="0.5" inputmode="decimal"><span>timer</span></div>
+          </div>
+          <div class="set-row">
+            <div><label for="sWeek">Varsle når uka passerer</label><p class="help">Samlet hos alle arbeidsgivere. 48 timer er vanlig grense.</p></div>
+            <div class="unit"><input type="number" id="sWeek" min="1" max="168" step="1" inputmode="numeric"><span>timer</span></div>
+          </div>
+
+          <h3 class="set-head">Frikort</h3>
+          <div class="set-row">
+            <div><label for="sFkOn">Jeg har frikort i år</label><p class="help">Ingen skattetrekk opp til grensen. Vaktbok viser hvor mye som er igjen under Oversikt.</p></div>
+            <input type="checkbox" id="sFkOn" class="switch">
+          </div>
+          <div id="sFkFields" hidden>
+            <div class="set-row">
+              <div><label for="sFkLimit">Grense</label><p class="help">100 000 kr i 2026.</p></div>
+              <div class="unit"><input type="number" id="sFkLimit" min="0" step="1000" inputmode="numeric" placeholder="100000"><span>kr</span></div>
             </div>
-          </fieldset>
+            <div class="set-row">
+              <div><label for="sFkOther">Inntekt i år utenfor Vaktbok</label><p class="help" id="fkHelp">Lønn før du begynte med Vaktbok, og feriepenger som utbetales i år. Begge teller mot frikortet.</p></div>
+              <div class="unit"><input type="number" id="sFkOther" min="0" step="100" inputmode="numeric" placeholder="0" aria-describedby="fkHelp"><span>kr</span></div>
+            </div>
+            <div class="set-row">
+              <div><label for="sFkNew">Jeg har bestilt skattekort for inntekt over grensen</label><p class="help">Da trekkes prosenten på kortet i stedet for 50 % når grensen er nådd.</p></div>
+              <input type="checkbox" id="sFkNew" class="switch">
+            </div>
+            <div class="set-row" id="sFkNewBox" hidden>
+              <div><label for="sFkNewPct">Prosent på det nye skattekortet</label></div>
+              <div class="unit"><input type="number" id="sFkNewPct" min="0" max="60" step="0.5" inputmode="decimal"><span>%</span></div>
+            </div>
+          </div>
         </form>
         <ul class="errors" id="settingsErrors" role="alert"></ul>
       </section>
