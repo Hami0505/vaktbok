@@ -7,9 +7,8 @@ import { extendSeries, openShift } from './ui/shift.js';
 import { openEmp, renderEmployers } from './ui/employers.js';
 import { pdfTimesheet, renderMonth } from './ui/overview.js';
 import { loadDemo, openNameDialog, renderAccount } from './ui/account.js';
-import { openFeedback } from './ui/feedback.js';
-import { openExport } from './ui/export.js';
-import { loadAdmin, renderAdmin } from './ui/admin.js';
+// Sjeldent brukte deler lastes først når de åpnes, så oppstarten blir raskere.
+const lazy = name => import(`./ui/${name}.js`);
 
 // ---------- Faner ----------
 export function setTab(tab) {
@@ -20,7 +19,7 @@ export function setTab(tab) {
     b.tabIndex = on ? 0 : -1;
   });
   for (const t of ['uke', 'oversikt', 'arbeidsgivere', 'konto', 'statistikk']) $(`v-${t}`).hidden = t !== tab;
-  if (tab === 'statistikk') loadAdmin();
+  if (tab === 'statistikk') lazy('admin').then(m => m.loadAdmin());
   if (location.hash !== `#${tab}`) history.replaceState(null, '', `#${tab}`);
   render();
 }
@@ -80,13 +79,14 @@ export function render() {
   if (ui.tab === 'uke') renderWeek();
   else if (ui.tab === 'oversikt') renderMonth();
   else if (ui.tab === 'arbeidsgivere') renderEmployers();
-  else if (ui.tab === 'statistikk') renderAdmin();
+  else if (ui.tab === 'statistikk') lazy('admin').then(m => m.renderAdmin());
   else renderAccount();
 }
 
 export const actions = {
-  'open-feedback': () => openFeedback(),
-  'open-export': el => openExport(el),
+  'open-feedback': async () => (await lazy('feedback')).openFeedback(),
+  'open-export': async el => (await lazy('export')).openExport(el),
+  'open-import': async () => (await getImporter()).open(),
   'open-admin': () => setTab('statistikk'),
   'tab-konto': () => setTab('konto'),
   'login-google': () => store.signInWithProvider('google').catch(e => toast(friendlyError(e))),

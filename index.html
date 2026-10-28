@@ -2,7 +2,7 @@
 <html class="booting" lang="nb">
 <head>
 <meta charset="UTF-8">
-<meta name="vaktbok-version" content="2026-10-28-20">
+<meta name="vaktbok-version" content="2026-10-28-23">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -21,6 +21,11 @@
 <link rel="modulepreload" href="js/config.js">
 <link rel="modulepreload" href="js/ui/core.js">
 <link rel="modulepreload" href="js/ui/week.js">
+<link rel="modulepreload" href="js/ui/account.js">
+<link rel="modulepreload" href="js/ui/employers.js">
+<link rel="modulepreload" href="js/ui/errors.js">
+<link rel="modulepreload" href="js/ui/overview.js">
+<link rel="modulepreload" href="js/ui/shift.js">
 <link rel="stylesheet" href="css/app.css">
 <script type="module" src="js/app.js"></script>
 </head>
@@ -77,6 +82,11 @@
   <main>
     <!-- UKE -->
     <div id="v-uke" role="tabpanel" aria-labelledby="t-uke">
+      <div class="start-card" id="weekIntro" hidden>
+        <h2>Kom i gang</h2>
+        <p>Legg inn arbeidsgiverne dine med timelønn og tillegg, eller hent vaktene du allerede har i kalenderen.</p>
+        <div class="row"><button class="btn primary" type="button" data-action="new-emp">Legg til arbeidsgiver</button><button class="btn" type="button" data-action="open-import">Importer vakter</button></div>
+      </div>
       <section class="panel week-panel">
         <div class="weeknav">
           <div class="weekhead">
@@ -95,8 +105,10 @@
       <div class="weeksum" id="weekSum"></div>
       <div class="actionbar">
         <button class="btn primary big" id="newShiftBtn" type="button">Ny vakt</button>
-        <button class="btn big" id="importBtn" type="button">Importer vakter</button>
-        <button class="btn big" type="button" data-action="open-export">Eksporter vakter</button>
+        <div class="secondary-actions">
+          <button class="btn" id="importBtn" type="button">Importer</button>
+          <button class="btn" id="exportBtnWeek" type="button" data-action="open-export">Eksporter</button>
+        </div>
       </div>
 
       <section class="panel">
@@ -146,21 +158,19 @@
           <h2>Varsler denne måneden</h2>
           <div id="warnList"></div>
         </section>
-        <section class="panel" aria-labelledby="payslipTitle">
+        <section class="panel" id="payslipPanel" aria-labelledby="payslipTitle">
           <h2 id="payslipTitle">Sjekk mot lønnsslippen</h2>
           <p class="small muted">Skriv inn brutto fra slippen som gjelder vaktene denne måneden. Ofte er det slippen måneden etter.</p>
           <div id="payslipList"></div>
         </section>
-        <section class="panel">
-          <h2>Eksporter og timelister</h2>
-          <div class="row exports">
-            <button class="btn" id="exportMonthBtn" type="button" data-action="open-export" data-period="month">Eksporter vaktene</button>
+        <section class="panel" id="exportPanel">
+          <h2>Timeliste</h2>
+          <label class="sheet-for">Timeliste for<select id="sheetEmp"></select></label>
+          <div class="pair">
+            <button class="btn" id="pdfBtn" type="button">Last ned PDF</button>
+            <button class="btn" id="sheetBtn" type="button">Kopier som tekst</button>
           </div>
-          <div class="row exports">
-            <select id="sheetEmp" class="inline-select" aria-label="Timeliste for"></select>
-            <button class="btn" id="sheetBtn" type="button">Kopier timeliste</button>
-            <button class="btn" id="pdfBtn" type="button">Timeliste som PDF</button>
-          </div>
+          <p class="small muted">Kalenderfil eller regneark for perioden: <button class="btn link inline" id="exportMonthBtn" type="button" data-action="open-export" data-period="month">Eksporter vaktene</button></p>
         </section>
       </div>
 

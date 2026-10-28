@@ -39,6 +39,8 @@ export function renderMonth() {
   if ([...$('sheetEmp').options].some(o => o.value === chosen)) $('sheetEmp').value = chosen;
   $('sheetEmp').hidden = ids.length < 2;
   $('exportMonthBtn').disabled = $('sheetBtn').disabled = !ids.length;
+  // Uten vakter denne måneden: vis bare tallene, ikke tomme varsler, lønnsslipp og timeliste.
+  for (const id of ['warnPanel', 'payslipPanel', 'exportPanel']) $(id).hidden = !ids.length;
   renderPayslips(byEmp, ids);
   renderYear(y);
   const fkWarn = renderFrikort(y);

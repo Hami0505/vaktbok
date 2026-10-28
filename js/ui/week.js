@@ -60,11 +60,14 @@ export function renderWeek() {
       + (offN ? `<p class="offered-note">I tillegg ${offN} ${offN === 1 ? 'tilbudt vakt' : 'tilbudte vakter'} (${hrs(offH)}) som ikke er tatt ennå.</p>` : '')
     : '';
 
-  if (!D().employers.length) {
-    $('weekList').innerHTML = `<div class="empty"><p>Legg inn arbeidsgiverne dine først, med timelønn og tillegg.</p>
-      <button class="btn primary" data-action="new-emp">Legg til arbeidsgiver</button></div>`;
-    return;
-  }
+  // Uten arbeidsgivere: «Kom i gang» øverst, og vakt-knappene som ikke kan brukes ennå, skjules.
+  const none = !D().employers.length;
+  $('weekIntro').hidden = !none;
+  document.querySelector('#v-uke .actionbar').hidden = none;
+  document.querySelector('#v-uke .week-panel').hidden = none;
+  $('weekList').closest('.panel').hidden = none;
+  $('exportBtnWeek').hidden = !D().shifts.length;
+  if (none) { $('weekList').innerHTML = ''; return; }
   const over = L.weeklyOverLimit(D().shifts, D().employers, D().settings.weekLimitH)
     .find(x => x.week === `${L.isoWeek(ws).year}-U${L.pad(week)}`);
   $('weekList').innerHTML = (over ? `<div class="flag weekly">Du har ${hrs(over.hours)} denne uka til sammen, over grensen din på ${num(D().settings.weekLimitH, 0)} timer.</div>` : '')

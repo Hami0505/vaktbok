@@ -135,6 +135,19 @@ Uten `feedback` åpner skjemaet e-postprogrammet i stedet.
 3. **Supabase** → Authentication → URL Configuration: sjekk at `https://hami0505.github.io/vaktbok/` står under *Redirect URLs*.
 4. **`js/config.js`** på GitHub: endre `providers: []` til `providers: ['google']`.
 
+## Sikkerhetskopi
+
+Supabase sin gratisplan tar ikke sikkerhetskopier, så det gjøres fra Macen med `scripts/vaktbok-backup.sh`. Kopien inneholder hele databasen (vakter, arbeidsgivere, innstillinger og kontoer) og lagres i `~/Documents/Vaktbok-backup`. De 12 siste beholdes.
+
+**Første gang:**
+1. `brew install libpq`, som gir `pg_dump`.
+2. Supabase → **Connect** → **Session pooler**: kopier adressen og bytt `[YOUR-PASSWORD]` med databasepassordet (Project Settings → Database → Reset password hvis du ikke har det).
+3. `vaktbok-backup oppsett` og lim inn adressen. Den lagres i nøkkelringen, ikke i en fil.
+
+**Deretter:** `vaktbok-backup`, for eksempel første dag hver måned.
+
+**Gjenopprette** (bare ved behov, og helst etter å ha spurt om hjelp): `pg_restore --data-only --dbname "<adresse>" <fil>.dump`.
+
 ## Statistikk og brukere
 
 Brukerne oppgir navn ved første innlogging, og appen lagrer datoen de sist åpnet den (tabellen `profiles`). Navnet vises også som «Display name» under Authentication → Users.
