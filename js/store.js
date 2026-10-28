@@ -113,6 +113,7 @@ export class Store extends EventTarget {
 
   async onUserChanged(user) {
     this.useScope(user);
+    this.trackPresence();
     if (user) {
       const guest = read(K.data('guest'), null);
       if (guest && (guest.shifts?.length || guest.employers?.length)) this.emit('guest-data', guest);
@@ -314,14 +315,24 @@ export class Store extends EventTarget {
   }
 
   // ---------- «Inne nå»: hver åpen app melder seg på med en tilfeldig ID, uten navn eller e-post ----------
+  // Nøkkelen er en fast, tilfeldig ID for enheten (lagret lokalt), så flere faner på samme enhet teller som én.
+  // Det eneste som sendes, er om enheten er innlogget eller ikke. Aldri hvem.
   joinPresence() {
     try {
-      const key = crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2);
+      let key = localStorage.getItem('vaktbok:device');
+      if (!key) { key = crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2); localStorage.setItem('vaktbok:device', key); }
       const ch = this.sb.channel('vaktbok-online', { config: { presence: { key } } });
-      ch.on('presence', { event: 'sync' }, () => { this.online = Object.keys(ch.presenceState()).length; this.emit('presence'); })
-        .subscribe(st => { if (st === 'SUBSCRIBED') Promise.resolve(ch.track({ since: Date.now() })).catch(() => { }); });
       this.presence = ch;
+      ch.on('presence', { event: 'sync' }, () => {
+        const state = ch.presenceState();
+        this.online = Object.keys(state).length;
+        this.onlineIn = Object.values(state).filter(metas => metas.some(m => m.in)).length;
+        this.emit('presence');
+      }).subscribe(st => { if (st === 'SUBSCRIBED') { this.presenceReady = true; this.trackPresence(); } });
     } catch { /* sanntid er en bonus, ikke nødvendig */ }
+  }
+  trackPresence() {
+    if (this.presence && this.presenceReady) Promise.resolve(this.presence.track({ in: !!this.user })).catch(() => { });
   }
 
   // ---------- Statistikk for administrator (supabase/oppdatering-statistikk.sql) ----------

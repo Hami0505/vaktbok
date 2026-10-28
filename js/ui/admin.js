@@ -27,14 +27,14 @@ export function renderAdmin() {
   const online = store.online ?? 0;
   const t = data?.totals || {};
   $('admTotals').innerHTML = `
-    <div class="lead"><b>${online}</b><span>Inne nå</span></div>
+    <div class="lead"><b>${online}</b><span>${online === 1 ? 'Enhet' : 'Enheter'} inne nå${online ? `, ${store.onlineIn ?? 0} innlogget` : ''}</span></div>
     <div><b>${t.users ?? '–'}</b><span>Brukere</span></div>
     <div><b>${t.active1 ?? '–'}</b><span>Aktive siste døgn</span></div>
     <div><b>${t.active7 ?? '–'}</b><span>Aktive siste 7 dager</span></div>
     <div><b>${t.active30 ?? '–'}</b><span>Aktive siste 30 dager</span></div>
     <div><b>${t.new30 ?? '–'}</b><span>Nye siste 30 dager</span></div>
     <div><b>${t.shifts ?? '–'}</b><span>Vakter</span></div>`;
-  $('admUpdated').textContent = `Oppdatert ${tid(Date.now())}. «Inne nå» oppdateres av seg selv.`;
+  $('admUpdated').textContent = `Oppdatert ${tid(Date.now())}. «Inne nå» teller enheter med appen åpen, og oppdateres av seg selv.`;
   const weeks = data.weeks || [], max = Math.max(1, ...weeks.map(w => w.n));
   $('admWeeks').innerHTML = weeks.length ? weeks.map(w => `<div title="Uke fra ${dato(w.week)}: ${w.n}"><b>${w.n}</b><span style="height:${Math.round(w.n / max * 100)}%"></span>${dato(w.week).slice(0, -3)}</div>`).join('') : '<p class="small muted">Ingen aktivitet ennå.</p>';
   $('admUsers').innerHTML = `<thead><tr><th>Navn</th><th>E-post</th><th>Registrert</th><th>Sist aktiv</th><th>Vakter</th></tr></thead><tbody>${
