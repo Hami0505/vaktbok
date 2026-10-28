@@ -612,3 +612,8 @@ details.more[open] > summary { margin-bottom: 6px; }
 /* Skjul hovedinnholdet til appen har tegnet første gang, så det ikke hopper. Vises uansett etter 2 s. */
 @keyframes vb-show { to { visibility: visible; } }
 html.booting main { visibility: hidden; animation: vb-show 0s 2s forwards; }
+
+/* Fanene følger med når du scroller på PC (på mobil ligger de allerede fast nederst). */
+@media (min-width: 641px) {
+  nav[aria-label="Hovedmeny"] { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: var(--paper); }
+}
