@@ -1,6 +1,6 @@
 # Vaktbok
 
-**Åpne appen:** https://hami0505.github.io/Vaktbok-prototype/
+**Åpne appen:** https://hami0505.github.io/vaktbok/
 
 Vakter fra alle arbeidsgivere på ett sted: timer, lønnsestimat, tillegg og varsel om for kort hviletid. Laget for alle som tar vakter hos flere arbeidsgivere eller via vikar- og bemanningsbyråer, for eksempel i helse, butikk, restaurant, lager og hotell.
 
@@ -8,7 +8,7 @@ Vakter fra alle arbeidsgivere på ett sted: timer, lønnsestimat, tillegg og var
 
 Vaktbok startet som **Mandatory Assignment 3 (Vibe Coding)** ved OsloMet, høsten 2026.
 
-- **Innlevert versjon:** taggen [`innlevering-ma3`](https://github.com/Hami0505/Vaktbok-prototype/tree/innlevering-ma3). Den har README-en med oppgavens beskrivelse av hvordan AI ble brukt og hvordan appen ble testet.
+- **Innlevert versjon:** taggen [`innlevering-ma3`](https://github.com/Hami0505/vaktbok/tree/innlevering-ma3). Den har README-en med oppgavens beskrivelse av hvordan AI ble brukt og hvordan appen ble testet.
 - **Etter fristen** er appen videreutviklet til en fullverdig tjeneste med konto, synk mellom enheter, offline-støtte og mer presise lønnsregler. Denne README-en beskriver den versjonen.
 
 Videreutviklingen er gjort på samme måte som innleveringen: jeg beskrev behov og problemer fra min egen arbeidshverdag, og brukte Claude (Anthropic) til å planlegge, skrive kode og tester, og finne og rette feil. Hver endring er testet automatisk og manuelt i nettleseren før den ble tatt i bruk.
@@ -132,7 +132,7 @@ Uten `feedback` åpner skjemaet e-postprogrammet i stedet.
 
 1. **Google Cloud Console** → APIs & Services → Credentials → *Create credentials* → *OAuth client ID* → *Web application*. Legg til `https://kvaxzvtlhbdpeicpcmbn.supabase.co/auth/v1/callback` under *Authorized redirect URIs*. Sett opp *OAuth consent screen* med appnavn, e-post og lenke til personvernerklæringen.
 2. **Supabase** → Authentication → Providers → Google: lim inn Client ID og Client secret, og slå på.
-3. **Supabase** → Authentication → URL Configuration: sjekk at `https://hami0505.github.io/Vaktbok-prototype/` står under *Redirect URLs*.
+3. **Supabase** → Authentication → URL Configuration: sjekk at `https://hami0505.github.io/vaktbok/` står under *Redirect URLs*.
 4. **`js/config.js`** på GitHub: endre `providers: []` til `providers: ['google']`.
 
 ## Statistikk og brukere
