@@ -4,11 +4,18 @@
 // Slå AV «Verify JWT» for denne funksjonen i Supabase.
 
 const URL_ = Deno.env.get('SUPABASE_URL')!;
-const KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+// Tjenestenøkkel: nye prosjekter har SUPABASE_SECRET_KEYS (sb_secret_…), eldre har SUPABASE_SERVICE_ROLE_KEY (JWT).
+// De nye nøklene sendes bare som apikey, de gamle også som Authorization.
+function serviceHeaders(): Record<string, string> {
+  let key = '';
+  try { const keys = JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS') || '{}'); key = keys.default || Object.values(keys)[0] || ''; } catch { /* ikke satt */ }
+  key = key || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+  return key.startsWith('sb_') ? { apikey: key } : { apikey: key, Authorization: `Bearer ${key}` };
+}
 
 const rest = async (path: string) => {
-  const r = await fetch(`${URL_}/rest/v1/${path}`, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}` } });
-  if (!r.ok) throw new Error(`rest ${r.status}`);
+  const r = await fetch(`${URL_}/rest/v1/${path}`, { headers: serviceHeaders() });
+  if (!r.ok) { console.error('Databasefeil:', r.status, await r.text()); throw new Error(`rest ${r.status}`); }
   return r.json();
 };
 const pad = (n: number) => String(n).padStart(2, '0');

@@ -4,7 +4,14 @@
 
 const ALLOWED_ORIGINS = ['https://hami0505.github.io', 'http://localhost:5173'];
 const URL_ = Deno.env.get('SUPABASE_URL')!;
-const KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+// Tjenestenøkkel: nye prosjekter har SUPABASE_SECRET_KEYS (sb_secret_…), eldre har SUPABASE_SERVICE_ROLE_KEY (JWT).
+// De nye nøklene sendes bare som apikey, de gamle også som Authorization.
+function serviceHeaders(): Record<string, string> {
+  let key = '';
+  try { const keys = JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS') || '{}'); key = keys.default || Object.values(keys)[0] || ''; } catch { /* ikke satt */ }
+  key = key || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+  return key.startsWith('sb_') ? { apikey: key } : { apikey: key, Authorization: `Bearer ${key}` };
+}
 const recent = new Map<string, number[]>(); // enkel grense: maks 5 per 10 minutter per IP (per instans)
 
 Deno.serve(async (req) => {
@@ -43,15 +50,18 @@ Deno.serve(async (req) => {
 
   const ins = await fetch(`${URL_}/rest/v1/feedback`, {
     method: 'POST',
-    headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    headers: { ...serviceHeaders(), 'Content-Type': 'application/json', Prefer: 'return=minimal' },
     body: JSON.stringify({ user_id: userId, email, kind, message, meta }),
   }).catch(() => null);
-  if (!ins?.ok) return json({ error: 'store' }, 502);
+  if (!ins?.ok) {
+    console.error('Klarte ikke å lagre tilbakemelding:', ins?.status, ins ? await ins.text() : 'ingen kontakt med databasen');
+    return json({ error: 'store' }, 502);
+  }
 
   const apiKey = Deno.env.get('BREVO_API_KEY'), to = Deno.env.get('FEEDBACK_TO');
   if (apiKey && to) {
     const label = { feil: 'Feil', forslag: 'Forslag', annet: 'Tilbakemelding' }[kind as 'feil' | 'forslag' | 'annet'];
-    await fetch('https://api.brevo.com/v3/smtp/email', {
+    const mail = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
       headers: { 'api-key': apiKey, 'Content-Type': 'application/json', accept: 'application/json' },
       body: JSON.stringify({
@@ -62,6 +72,7 @@ Deno.serve(async (req) => {
         textContent: `${message}\n\n---\nFra: ${email || 'ikke oppgitt'}${userId ? ` (innlogget bruker ${userId})` : ' (ikke innlogget)'}\n${meta ? JSON.stringify(meta, null, 2) : ''}`,
       }),
     }).catch(() => null);
-  }
+    if (!mail?.ok) console.error('Klarte ikke å sende e-post via Brevo:', mail?.status, mail ? await mail.text() : 'ingen kontakt');
+  } else console.warn('BREVO_API_KEY eller FEEDBACK_TO mangler, så ingen e-post ble sendt.');
   return json({ ok: true });
 });
