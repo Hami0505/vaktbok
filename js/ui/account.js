@@ -48,8 +48,18 @@ $('feedBody').addEventListener('click', async ev => {
   } catch (e) { toast(friendlyError(e)); }
 });
 
+// Statistikk-knappen vises bare for administrator. Svaret huskes per bruker.
+let adminCache = { user: null, yes: false };
+async function renderAdminButton() {
+  const box = $('adminBtnBox'); if (!box) return;
+  if (!store.user) { box.hidden = true; return; }
+  if (adminCache.user !== store.user.id) adminCache = { user: store.user.id, yes: await store.isAdmin() };
+  box.hidden = !adminCache.yes;
+}
+
 export function renderAccount() {
   renderFeed();
+  renderAdminButton();
   const p = $('accountPanel');
   if (!store.configured) {
     p.innerHTML = `<h2>Konto</h2><p class="muted">Denne versjonen er satt opp uten server. Alt lagres bare i denne nettleseren, så last ned en kopi av dataene jevnlig.</p>`;

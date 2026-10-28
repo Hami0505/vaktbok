@@ -9,6 +9,7 @@ import { pdfTimesheet, renderMonth } from './ui/overview.js';
 import { loadDemo, openNameDialog, renderAccount } from './ui/account.js';
 import { openFeedback } from './ui/feedback.js';
 import { openExport } from './ui/export.js';
+import { loadAdmin, renderAdmin } from './ui/admin.js';
 
 // ---------- Faner ----------
 export function setTab(tab) {
@@ -18,7 +19,8 @@ export function setTab(tab) {
     b.setAttribute('aria-selected', String(on));
     b.tabIndex = on ? 0 : -1;
   });
-  for (const t of ['uke', 'oversikt', 'arbeidsgivere', 'konto']) $(`v-${t}`).hidden = t !== tab;
+  for (const t of ['uke', 'oversikt', 'arbeidsgivere', 'konto', 'statistikk']) $(`v-${t}`).hidden = t !== tab;
+  if (tab === 'statistikk') loadAdmin();
   if (location.hash !== `#${tab}`) history.replaceState(null, '', `#${tab}`);
   render();
 }
@@ -78,12 +80,15 @@ export function render() {
   if (ui.tab === 'uke') renderWeek();
   else if (ui.tab === 'oversikt') renderMonth();
   else if (ui.tab === 'arbeidsgivere') renderEmployers();
+  else if (ui.tab === 'statistikk') renderAdmin();
   else renderAccount();
 }
 
 export const actions = {
   'open-feedback': () => openFeedback(),
   'open-export': el => openExport(el),
+  'open-admin': () => setTab('statistikk'),
+  'tab-konto': () => setTab('konto'),
   'login-google': () => store.signInWithProvider('google').catch(e => toast(friendlyError(e))),
   'accept-offer': el => {
     const s = D().shifts.find(x => x.id === el.dataset.id); if (!s) return;
@@ -208,7 +213,7 @@ export const initialHash = location.hash;
 export const hashTab = location.hash.slice(1) === 'maned' ? 'oversikt' : location.hash.slice(1);
 
  // gamle lenker til #maned virker fortsatt
-export const start = ['uke', 'oversikt', 'arbeidsgivere', 'konto'].includes(hashTab) ? hashTab : 'uke';
+export const start = ['uke', 'oversikt', 'arbeidsgivere', 'konto', 'statistikk'].includes(hashTab) ? hashTab : 'uke';
 
 setTab(start);
 

@@ -75,3 +75,12 @@ drop policy if exists "alle kan melde feil" on public.client_errors;
 create policy "alle kan melde feil" on public.client_errors for insert to anon, authenticated
   with check (user_id is null or user_id = (select auth.uid()));
 grant insert on public.client_errors to anon, authenticated;
+
+-- ---------- Tilgang for serverfunksjonene ----------
+-- Nyere Supabase-prosjekter gir ikke service_role tilgang til nye tabeller automatisk.
+grant usage on schema public to service_role;
+grant select, insert, update, delete on
+  public.feedback, public.client_errors, public.calendar_feeds,
+  public.shifts, public.employers, public.profiles
+  to service_role;
+grant usage, select on all sequences in schema public to anon, authenticated, service_role;

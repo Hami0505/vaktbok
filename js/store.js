@@ -56,6 +56,7 @@ export class Store extends EventTarget {
         this.sb = createClient(this.config.supabaseUrl, this.config.supabaseAnonKey, {
           auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce' },
         });
+        this.joinPresence();
         const { data } = await this.sb.auth.getSession();
         this.useScope(data.session?.user || null);
         this.sb.auth.onAuthStateChange((event, session) => {
@@ -310,6 +311,29 @@ export class Store extends EventTarget {
     this.profile = { ...(this.profile || {}), display_name: clean };
     this.emit('profile');
     return clean;
+  }
+
+  // ---------- «Inne nå»: hver åpen app melder seg på med en tilfeldig ID, uten navn eller e-post ----------
+  joinPresence() {
+    try {
+      const key = crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2);
+      const ch = this.sb.channel('vaktbok-online', { config: { presence: { key } } });
+      ch.on('presence', { event: 'sync' }, () => { this.online = Object.keys(ch.presenceState()).length; this.emit('presence'); })
+        .subscribe(st => { if (st === 'SUBSCRIBED') Promise.resolve(ch.track({ since: Date.now() })).catch(() => { }); });
+      this.presence = ch;
+    } catch { /* sanntid er en bonus, ikke nødvendig */ }
+  }
+
+  // ---------- Statistikk for administrator (supabase/oppdatering-statistikk.sql) ----------
+  async isAdmin() {
+    if (!this.sb || !this.user) return false;
+    const { data, error } = await this.sb.rpc('is_admin');
+    return !error && data === true;
+  }
+  async adminStats() {
+    const { data, error } = await this.sb.rpc('admin_stats');
+    if (error) throw new Error(error.message);
+    return data;
   }
 
   // ---------- Kalenderabonnement (supabase/functions/calendar) ----------

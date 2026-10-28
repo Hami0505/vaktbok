@@ -2,7 +2,7 @@
 <html lang="nb">
 <head>
 <meta charset="UTF-8">
-<meta name="vaktbok-version" content="2026-10-28-16">
+<meta name="vaktbok-version" content="2026-10-28-17">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -182,6 +182,22 @@
       </div>
     </div>
 
+    <!-- STATISTIKK (bare administrator) -->
+    <div id="v-statistikk" hidden>
+      <section class="panel">
+        <div class="weeknav">
+          <div class="weekhead"><h2>Statistikk</h2><p class="range" id="admUpdated"></p></div>
+          <div class="arrows"><button class="btn" type="button" id="admRefresh">Oppdater</button></div>
+        </div>
+        <div class="totals adm-totals" id="admTotals"></div>
+      </section>
+      <section class="panel"><h2>Aktivitet per uke</h2><p class="small muted">Antall brukere som sist åpnet appen den uka.</p><div class="adm-weeks" id="admWeeks"></div></section>
+      <section class="panel"><h2>Brukere</h2><div class="scroll"><table id="admUsers"></table></div></section>
+      <section class="panel"><h2>Feil siste 30 dager</h2><div id="admErrors"></div></section>
+      <section class="panel"><h2>Tilbakemeldinger</h2><div id="admFeedback"></div></section>
+      <p><button class="btn link" type="button" data-action="tab-konto">Tilbake til Konto</button></p>
+    </div>
+
     <!-- ARBEIDSGIVERE -->
     <div id="v-arbeidsgivere" role="tabpanel" aria-labelledby="t-arbeidsgivere" hidden>
       <section class="panel">
@@ -196,6 +212,12 @@
     <!-- KONTO -->
     <div id="v-konto" role="tabpanel" aria-labelledby="t-konto" hidden>
       <section class="panel" id="accountPanel"></section>
+
+      <section class="panel" id="adminBtnBox" hidden>
+        <h2>Statistikk</h2>
+        <p class="small muted">Bare du ser dette. Brukere, aktivitet, feil og tilbakemeldinger, og hvor mange som er inne nå.</p>
+        <div class="row"><button class="btn primary" type="button" data-action="open-admin">Åpne statistikk</button></div>
+      </section>
 
       <section class="panel" id="feedPanel" hidden>
         <h2>Vaktene i kalenderen din</h2>
