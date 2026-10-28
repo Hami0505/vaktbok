@@ -32,7 +32,7 @@ Videreutviklingen er gjort på samme måte som innleveringen: jeg beskrev behov 
 - **Kalenderabonnement:** vaktene dukker opp i iPhone-, Google- eller Outlook-kalenderen av seg selv.
 - **Lim inn tekst:** lim inn en SMS, e-post eller vaktliste, så finner Vaktbok datoer og klokkeslett. Det skjer i appen, så teksten sendes ingen steder.
 - **Eksport** til kalenderfil (.ics) eller regneark (.csv), med valg av periode og arbeidsgiver.
-- **Tilbakemeldingsskjema** i appen.
+- **Tilbakemeldingsskjema** i appen, og **feillogg** som viser deg feil som skjer hos brukerne.
 - **Konto og synk i sanntid** mellom mobil og PC, med innlogging via engangskode på e-post. Uten konto fungerer alt lokalt i nettleseren.
 - **Fungerer offline** og kan installeres på hjemskjermen. Endringer gjort uten nett sendes når nettet er tilbake.
 - **Personvern:** last ned alle data, slett alt, slett konto. Appen nekter å lagre fødselsnummer og D-nummer i notater (kontrollsifre sjekkes). Ingen sporing, ingen eksterne fonter.
@@ -55,7 +55,7 @@ Ren HTML, CSS og JavaScript-moduler. Ingen build-steg, så appen ligger rett på
 | `js/config.js` | Supabase-nøkler og kontaktadresse (offentlige verdier, tilgang styres av RLS) |
 | `supabase/schema.sql` | Tabeller, tilganger, Row Level Security, sanntid og sletting av konto |
 | `sw.js` | Service worker for offline-bruk |
-| `tests/` | 71 automatiske tester, kjøres på hver push via GitHub Actions |
+| `tests/` | 72 automatiske tester, kjøres på hver push via GitHub Actions |
 
 Lagring er lokal først: alle endringer lagres i nettleseren med en gang og legges i en utboks. Når brukeren er innlogget og på nett, sendes utboksen til Supabase og serverdata hentes inn. Andre enheter får beskjed i sanntid. Serveren er fasit, unntatt for endringer som ennå ikke er sendt.
 

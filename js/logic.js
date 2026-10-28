@@ -871,3 +871,22 @@ export function migrateV1(old, newId) {
   }));
   return { employers, shifts };
 }
+
+
+// ---------- Feillogg ----------
+// Gjør en nettleserfeil om til en kort rapport, eller null hvis den bør overses (støy fra utvidelser, «Script error.»).
+// Fjerner adressen til appen, så bare filnavn og linje står igjen, og kutter lange tekster.
+export function cleanError({ message, source, line, stack } = {}, origin = '') {
+  const msg = String(message || '').trim();
+  if (!msg || /^Script error\.?$/i.test(msg) || /ResizeObserver loop/i.test(msg)) return null;
+  const src = String(source || '');
+  if (src && !src.startsWith(origin)) return null; // feil fra nettleserutvidelser og andre sider
+  if (/chrome-extension:|moz-extension:|safari-extension:|safari-web-extension:/.test(String(stack || ''))) return null;
+  const strip = t => String(t || '').split(origin).join('');
+  return {
+    message: msg.slice(0, 500),
+    source: strip(src).slice(0, 300) || null,
+    line: Number.isFinite(+line) && line ? +line : null,
+    stack: strip(stack).slice(0, 4000) || null,
+  };
+}

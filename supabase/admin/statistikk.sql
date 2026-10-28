@@ -28,3 +28,16 @@ select date_trunc('week', last_seen)::date as uke, count(*) as sist_aktive_denne
 from public.profiles
 where last_seen >= current_date - 84
 group by 1 order by 1;
+
+-- 4. Feil hos brukerne siste 30 dager, de vanligste først
+select message, source, line, count(*) as antall, count(distinct coalesce(user_id::text, browser)) as brukere, max(created_at) as sist
+from public.client_errors
+where created_at > now() - interval '30 days'
+group by message, source, line
+order by antall desc;
+
+-- 5. Siste tilbakemeldinger
+select created_at, kind, message, email from public.feedback order by created_at desc limit 50;
+
+-- 6. Rydd: slett feillogg eldre enn seks måneder
+-- delete from public.client_errors where created_at < now() - interval '6 months';

@@ -605,3 +605,14 @@ test('eksport: velg periode og arbeidsgiver, uten tilbudte vakter', () => {
   assert.equal(csv.split('\r\n').length, 2, 'overskrift og én rad');
   assert.ok(L.toCSV(sh, [emp, emp2], '2026-11').includes('2026-11-02'), 'måned som før');
 });
+
+
+test('feillogg: rydder og overser støy', () => {
+  const o = 'https://hami0505.github.io/Vaktbok-prototype';
+  const r = L.cleanError({ message: 'x is undefined', source: o + '/js/ui/week.js', line: 42, stack: `at renderWeek (${o}/js/ui/week.js:42:7)` }, o);
+  assert.deepEqual(r, { message: 'x is undefined', source: '/js/ui/week.js', line: 42, stack: 'at renderWeek (/js/ui/week.js:42:7)' });
+  assert.equal(L.cleanError({ message: 'Script error.' }, o), null);
+  assert.equal(L.cleanError({ message: 'feil', source: 'chrome-extension://abc/x.js' }, o), null);
+  assert.equal(L.cleanError({ message: 'feil', stack: 'at safari-web-extension://x' }, o), null);
+  assert.equal(L.cleanError({ message: 'a'.repeat(900) }, o).message.length, 500);
+});

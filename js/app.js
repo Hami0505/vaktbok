@@ -1,3 +1,4 @@
+import './ui/errors.js';
 import * as L from './logic.js';
 import { newId } from './store.js';
 import { $, D, V1_DONE, V1_KEY, addDays, choiceBox, confirmBox, empById, esc, fmtDay, friendlyError, store, toast, ui, ym } from './ui/core.js';

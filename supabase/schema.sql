@@ -164,3 +164,24 @@ create table if not exists public.feedback (
 );
 alter table public.feedback enable row level security;
 revoke all on public.feedback from anon, authenticated;
+
+-- ---------- Feillogg fra appen ----------
+-- Appen skriver hit når noe krasjer hos en bruker: feilmelding, hvor i koden, nettleser og versjon.
+-- Aldri innholdet i vaktene. Alle kan skrive (også gjester), ingen kan lese via appen. Les i Table Editor.
+create table if not exists public.client_errors (
+  id         bigint generated always as identity primary key,
+  created_at timestamptz not null default now(),
+  user_id    uuid default auth.uid() references auth.users (id) on delete set null,
+  message    text not null check (char_length(message) <= 500),
+  source     text check (char_length(source) <= 300),
+  line       integer,
+  stack      text check (char_length(stack) <= 4000),
+  version    text check (char_length(version) <= 40),
+  browser    text check (char_length(browser) <= 300),
+  page       text check (char_length(page) <= 200)
+);
+alter table public.client_errors enable row level security;
+drop policy if exists "alle kan melde feil" on public.client_errors;
+create policy "alle kan melde feil" on public.client_errors for insert to anon, authenticated
+  with check (user_id is null or user_id = (select auth.uid()));
+grant insert on public.client_errors to anon, authenticated;
