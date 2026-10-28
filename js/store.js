@@ -40,6 +40,9 @@ export class Store extends EventTarget {
     this.data = emptyData();
     this.outbox = [];
     this.retryMs = 2000;
+    // Start med sist innloggede bruker og vaktene som allerede ligger lokalt, så første bilde er riktig.
+    // Innloggingen sjekkes når Supabase-biblioteket er lastet, og byttes bare hvis den er en annen.
+    this.useScope(this.configured ? read(K.lastUser, null) : null);
   }
 
   get configured() { return !!(this.config.supabaseUrl && this.config.supabaseAnonKey); }
@@ -101,7 +104,7 @@ export class Store extends EventTarget {
 
   useScope(user) {
     if ((user && user.id) !== (this.user && this.user.id)) this.profile = null;
-    this.user = user ? { id: user.id, email: user.email, name: user.user_metadata?.full_name || user.user_metadata?.name || '' } : null;
+    this.user = user ? { id: user.id, email: user.email, name: user.user_metadata?.full_name || user.user_metadata?.name || user.name || '' } : null;
     if (this.sb) this.user ? this.subscribe() : this.unsubscribe();
     this.data = { ...emptyData(), ...read(K.data(this.scope), {}) };
     this.data.settings = { ...DEFAULT_SETTINGS, ...this.data.settings };

@@ -608,3 +608,7 @@ details.more[open] > summary { margin-bottom: 6px; }
 @media (max-width: 560px) { .adm-totals { grid-template-columns: repeat(2, 1fr); } }
 .adm-totals .lead span { display: block; }
 #admUsers th:nth-child(-n+2), #admUsers td:nth-child(-n+2) { text-align: left; }
+
+/* Skjul hovedinnholdet til appen har tegnet første gang, så det ikke hopper. Vises uansett etter 2 s. */
+@keyframes vb-show { to { visibility: visible; } }
+html.booting main { visibility: hidden; animation: vb-show 0s 2s forwards; }

@@ -216,6 +216,8 @@ export const hashTab = location.hash.slice(1) === 'maned' ? 'oversikt' : locatio
 export const start = ['uke', 'oversikt', 'arbeidsgivere', 'konto', 'statistikk'].includes(hashTab) ? hashTab : 'uke';
 
 setTab(start);
+// Første tegning er ferdig: vis innholdet (se .booting i CSS).
+document.documentElement.classList.remove('booting');
 
 if (initialHash === '#om') showLanding(true);
 // Ny besøkende: ingen lokale data, ingen innlogging lagret og aldri vært innom. Vis landingssiden med en gang,
