@@ -338,7 +338,7 @@ export class Store extends EventTarget {
     if (this.presence && this.presenceReady) Promise.resolve(this.presence.track({ in: !!this.user })).catch(() => { });
   }
 
-  // ---------- Statistikk for administrator (supabase/oppdatering-statistikk.sql) ----------
+  // ---------- Statistikk for administrator (supabase/migrations/2026-10-28-statistikk.sql) ----------
   async isAdmin() {
     if (!this.sb || !this.user) return false;
     const { data, error } = await this.sb.rpc('is_admin');
