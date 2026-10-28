@@ -533,3 +533,75 @@ test('hviletidsvarsel sier om vaktene er hos samme arbeidsgiver', () => {
   assert.equal(L.restWarnings([a, b], [emp, emp2], 11).b.sameEmployer, true);
   assert.equal(L.restWarnings([a, c], [emp, emp2], 11).c.sameEmployer, false);
 });
+
+test('tilbudte vakter vises, men teller ikke i lønn, ukegrense, hviletid eller frikort', () => {
+  const a = S({ id: 'a', date: '2026-10-20', start: '14:00', end: '22:00' });
+  const b = S({ id: 'b', date: '2026-10-21', start: '06:00', end: '14:00', status: 'offered' });
+  const m = L.monthSummary([a, b], [emp], '2026-10', {});
+  assert.equal(m.total.count, 1); close(m.total.hours, 8, 'bare den bekreftede');
+  assert.deepEqual(L.restWarnings([a, b], [emp], 11), {}, 'ingen hviletidsvarsel fra tilbudt vakt');
+  assert.equal(L.restWarnings([a, b], [emp], 11, 'b').b.type, 'rest', 'men forhåndsvisningen kan ta den med');
+  assert.equal(L.shiftsInMonth([a, b], '2026-10').length, 1);
+  assert.equal(L.shiftsInMonth([a, b], '2026-10', { includeOffered: true }).length, 2);
+  const fee = { id: 'f', name: 'Jobb', rate: 0, rules: [], pay: { type: 'fee', feeDefault: 50000 } };
+  const st = L.frikortStatus([S({ employerId: 'f', date: '2026-03-01', start: '08:00', end: '10:00', status: 'offered' })], [fee], { frikort: { on: true, limit: 100000 } }, '2026', '2026-12-31');
+  assert.equal(st.earned, 0, 'tilbudt teller ikke mot frikort');
+  assert.ok(!L.toCSV([a, b], [emp], '2026-10').includes('2026-10-21'), 'ikke med i eksport');
+});
+
+test('funne vakter går gjennom samme kontroll som regneark', () => {
+  const res = { shifts: [
+    { date: '2026-11-12', start: '22:00', end: '07:30', employer: 'Junibakken', note: 'N2' },
+    { date: '2026-11-14', start: '08:00', end: '16:00', employer: 'Nytt sted', note: '' },
+    { date: '2026-11-15', start: '08:00', end: '16:00', employer: null, note: '' },
+  ] };
+  const rows = L.textToRows(res);
+  const cols = L.guessColumns(rows[0]);
+  const ids = { junibakken: 'e1' };
+  let n = 0;
+  const { shifts, skipped } = L.csvToShifts(rows.slice(1), cols, {
+    employerFor: name => ids[name.toLowerCase()] || `new:${name}`, defaultEmployerId: null, newId: () => `s${++n}`, breakMin: 30,
+  });
+  assert.equal(shifts.length, 2, 'vakt uten arbeidsgiver hoppes over når ingen er valgt');
+  assert.equal(skipped.noEmployer, 1);
+  assert.deepEqual([shifts[0].employerId, shifts[0].start, shifts[0].end, shifts[0].breakMin, shifts[0].note], ['e1', '22:00', '07:30', 30, 'N2']);
+  assert.equal(shifts[1].employerId, 'new:Nytt sted');
+});
+
+
+test('finner vakter i vanlige SMS- og e-postformater', () => {
+  const today = new Date(2026, 9, 28); // onsdag 28. oktober 2026
+  const f = (txt, emps = []) => L.parseShiftText(txt, { today, employers: emps }).shifts.map(s => `${s.date} ${s.start}-${s.end}${s.employer ? ' ' + s.employer : ''}`);
+  assert.deepEqual(f('Hei! Kan du ta natt 12/11 22-07.30 på Junibakken?', ['Junibakken', 'Sykehjem']), ['2026-11-12 22:00-07:30 Junibakken']);
+  assert.deepEqual(f('Vakter neste uke:\nman 2.11 kl 15.00–23.00\ntir 3.11 kl 15.00–23.00'), ['2026-11-02 15:00-23:00', '2026-11-03 15:00-23:00']);
+  assert.deepEqual(f('12. nov kl 15-23'), ['2026-11-12 15:00-23:00']);
+  assert.deepEqual(f('2026-11-12 0800-1600'), ['2026-11-12 08:00-16:00']);
+  assert.deepEqual(f('i morgen 16-22'), ['2026-10-29 16:00-22:00']);
+  assert.deepEqual(f('fredag 14:00 til 22:00'), ['2026-10-30 14:00-22:00']);
+  assert.deepEqual(f('Dato: 15.12\nTid: 22–07'), ['2026-12-15 22:00-07:00'], 'tid på linja under datoen');
+  assert.deepEqual(f('3.1 08-16'), ['2027-01-03 08:00-16:00'], 'januar tolkes som neste år når det er langt tilbake');
+  assert.deepEqual(f('14.11.2026 07:30-15:30, 15.11.2026 07:30-15:30'), ['2026-11-14 07:30-15:30'], 'bare første dato per linje');
+  assert.deepEqual(f('Hilsen Kari, tlf 912 34 567'), [], 'ingen vakt uten dato og tid');
+  assert.deepEqual(f('Møte 12.11'), [], 'dato uten tidsrom er ikke en vakt');
+  assert.deepEqual(f('Prisen er 12.11-14.11'), [], 'tall som ikke er klokkeslett');
+  assert.ok(L.parseShiftText('hei', { today }).comment.includes('Fant ingen vakter'));
+});
+
+
+test('eksport: velg periode og arbeidsgiver, uten tilbudte vakter', () => {
+  const sh = [
+    S({ id: 'a', date: '2026-10-05', start: '08:00', end: '16:00' }),
+    S({ id: 'b', date: '2026-11-02', start: '08:00', end: '16:00' }),
+    S({ id: 'c', employerId: 'e2', date: '2026-11-03', start: '08:00', end: '16:00' }),
+    S({ id: 'd', date: '2026-11-04', start: '08:00', end: '16:00', status: 'offered' }),
+  ];
+  const ids = o => L.selectForExport(sh, { today: '2026-10-28', ...o }).map(s => s.id).join('');
+  assert.equal(ids({}), 'abc');
+  assert.equal(ids({ period: 'month', ym: '2026-11' }), 'bc');
+  assert.equal(ids({ period: 'future' }), 'bc');
+  assert.equal(ids({ period: 'range', from: '2026-10-01', to: '2026-11-02' }), 'ab');
+  assert.equal(ids({ employerId: 'e2' }), 'c');
+  const csv = L.toCSV(sh, [emp, emp2], L.selectForExport(sh, { employerId: 'e2' }));
+  assert.equal(csv.split('\r\n').length, 2, 'overskrift og én rad');
+  assert.ok(L.toCSV(sh, [emp, emp2], '2026-11').includes('2026-11-02'), 'måned som før');
+});

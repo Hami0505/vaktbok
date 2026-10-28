@@ -28,6 +28,11 @@ Videreutviklingen er gjort på samme måte som innleveringen: jeg beskrev behov 
 - **Oversikt** over måned og år per arbeidsgiver, med diagram over året. Hold over eller trykk på en måned for å se tallene og åpne den. Regneark (CSV for Excel), kalenderfil (.ics), timeliste til utklippstavlen og timeliste som PDF med signaturfelt.
 - **Importer vakter** fra kalenderlenke (iPhone og iCloud, Google, Outlook, byråets vaktplan), kalenderfil (.ics), regneark (.csv) eller sikkerhetskopi. Hendelsene samles etter navn, så du krysser av for hva som er vakter og kobler hver gruppe til en arbeidsgiver (eller oppretter en ny). Gjentakende hendelser blir enkeltvakter, du kan velge bort enkeltvakter, setter standardpause, og dubletter hoppes over. Lagrede kalenderlenker husker valgene og kan hentes på nytt med ett trykk.
 - **Sjekk mot lønnsslippen:** skriv inn utbetalt brutto og se om det stemmer med estimatet.
+- **Tilbudte vakter:** merk vakter du er tilbudt, men ikke har tatt. De vises skravert og telles ikke før du trykker «Ta vakta».
+- **Kalenderabonnement:** vaktene dukker opp i iPhone-, Google- eller Outlook-kalenderen av seg selv.
+- **Lim inn tekst:** lim inn en SMS, e-post eller vaktliste, så finner Vaktbok datoer og klokkeslett. Det skjer i appen, så teksten sendes ingen steder.
+- **Eksport** til kalenderfil (.ics) eller regneark (.csv), med valg av periode og arbeidsgiver.
+- **Tilbakemeldingsskjema** i appen.
 - **Konto og synk i sanntid** mellom mobil og PC, med innlogging via engangskode på e-post. Uten konto fungerer alt lokalt i nettleseren.
 - **Fungerer offline** og kan installeres på hjemskjermen. Endringer gjort uten nett sendes når nettet er tilbake.
 - **Personvern:** last ned alle data, slett alt, slett konto. Appen nekter å lagre fødselsnummer og D-nummer i notater (kontrollsifre sjekkes). Ingen sporing, ingen eksterne fonter.
@@ -50,7 +55,7 @@ Ren HTML, CSS og JavaScript-moduler. Ingen build-steg, så appen ligger rett på
 | `js/config.js` | Supabase-nøkler og kontaktadresse (offentlige verdier, tilgang styres av RLS) |
 | `supabase/schema.sql` | Tabeller, tilganger, Row Level Security, sanntid og sletting av konto |
 | `sw.js` | Service worker for offline-bruk |
-| `tests/` | 63 automatiske tester, kjøres på hver push via GitHub Actions |
+| `tests/` | 71 automatiske tester, kjøres på hver push via GitHub Actions |
 
 Lagring er lokal først: alle endringer lagres i nettleseren med en gang og legges i en utboks. Når brukeren er innlogget og på nett, sendes utboksen til Supabase og serverdata hentes inn. Andre enheter får beskjed i sanntid. Serveren er fasit, unntatt for endringer som ennå ikke er sendt.
 
@@ -111,6 +116,24 @@ Uten egen SMTP sender Supabase bare noen få e-poster i timen, og bare med innlo
    ```
 
 Sendes e-postene fra en Gmail-adresse, kan de havne i søppelpost. Et eget domene som er bekreftet hos e-posttjenesten løser det.
+
+## Nye serverfunksjoner
+
+To nye funksjoner ligger i `supabase/functions/`. Deploy hver av dem i Supabase → Edge Functions → **Deploy a new function** → **Via Editor**, med samme navn som mappa, og slå av **Verify JWT** (funksjonene sjekker selv det de trenger).
+
+| Funksjon | Hva den gjør | Hemmeligheter (Edge Functions → Secrets) |
+|---|---|---|
+| `calendar` | Kalenderabonnement: kalenderapper henter vaktene via en hemmelig lenke | Ingen |
+| `feedback` | Tilbakemeldingsskjemaet: lagrer i tabellen `feedback` og sender e-post | `BREVO_API_KEY`, `FEEDBACK_TO`, `FEEDBACK_FROM` |
+
+Uten `feedback` åpner skjemaet e-postprogrammet i stedet.
+
+## Google-innlogging (valgfritt)
+
+1. **Google Cloud Console** → APIs & Services → Credentials → *Create credentials* → *OAuth client ID* → *Web application*. Legg til `https://kvaxzvtlhbdpeicpcmbn.supabase.co/auth/v1/callback` under *Authorized redirect URIs*. Sett opp *OAuth consent screen* med appnavn, e-post og lenke til personvernerklæringen.
+2. **Supabase** → Authentication → Providers → Google: lim inn Client ID og Client secret, og slå på.
+3. **Supabase** → Authentication → URL Configuration: sjekk at `https://hami0505.github.io/Vaktbok-prototype/` står under *Redirect URLs*.
+4. **`js/config.js`** på GitHub: endre `providers: []` til `providers: ['google']`.
 
 ## Statistikk og brukere
 

@@ -18,6 +18,8 @@
 <link rel="modulepreload" href="js/store.js">
 <link rel="modulepreload" href="js/sync-core.js">
 <link rel="modulepreload" href="js/config.js">
+<link rel="modulepreload" href="js/ui/core.js">
+<link rel="modulepreload" href="js/ui/week.js">
 <link rel="stylesheet" href="css/app.css">
 <script type="module" src="js/app.js"></script>
 </head>
@@ -36,7 +38,7 @@
   <section id="landing" class="landing" hidden role="main" aria-labelledby="landingTitle">
     <div class="landing-hero">
       <h2 id="landingTitle">Alle vaktene dine, på ett sted.</h2>
-      <p class="lead">For deg som har vakter hos flere arbeidsgivere, enten du jobber i helse, butikk, restaurant eller via et vikarbyrå. Se timer, lønn og hviletid samlet, i stedet for i fem forskjellige timelister.</p>
+      <p class="lead">For deg som har vakter hos flere arbeidsgivere. Timer, lønn og hviletid samlet, i stedet for i fem timelister.</p>
       <div class="row">
         <button class="btn primary big" type="button" data-action="landing-demo">Prøv med eksempeldata</button>
         <button class="btn big" type="button" data-action="landing-start">Start med egne vakter</button>
@@ -93,6 +95,7 @@
       <div class="actionbar">
         <button class="btn primary big" id="newShiftBtn" type="button">Ny vakt</button>
         <button class="btn big" id="importBtn" type="button">Importer vakter</button>
+        <button class="btn big" type="button" data-action="open-export">Eksporter vakter</button>
       </div>
 
       <section class="panel">
@@ -113,8 +116,8 @@
           <button type="button" role="radio" data-pay="net" aria-checked="false">Utbetalt</button>
         </div>
       </div>
-      <p class="help" id="netNote" hidden>Etter skattetrekk. Trekk er et forskudd på skatten, ikke den endelige skatten. Blir det trukket for mye, får du det tilbake i skatteoppgjøret.</p>
-      <p class="help" id="netHelp" hidden>Du har ikke lagt inn skattetrekk ennå, så utbetalt er lik brutto. Legg inn standard skattetrekk eller frikort under <button class="btn link inline" type="button" data-action="go-settings">Konto → Innstillinger</button>, eller trekk per arbeidsgiver.</p>
+      <p class="help" id="netNote" hidden>Etter skattetrekk. Trekk er forskudd på skatten, og for mye trukket får du tilbake.</p>
+      <p class="help" id="netHelp" hidden>Uten skattetrekk er utbetalt lik brutto. Legg det inn under <button class="btn link inline" type="button" data-action="go-settings">Konto → Innstillinger</button>.</p>
 
       <section class="panel frikort-panel" id="frikortPanel" hidden aria-labelledby="fkTitle">
         <h2 id="fkTitle">Frikort</h2>
@@ -136,7 +139,7 @@
           <div class="totals" id="totals"></div>
           <p class="small muted" id="kindSplit"></p>
           <div class="scroll"><table id="empTable"></table></div>
-          <p class="small muted">Estimat. Tillegg, overtid, feriepenger og skatt regnes etter reglene du har lagt inn. Sjekk alltid mot lønnsslippen.</p>
+          <p class="small muted">Estimat etter reglene du har lagt inn. Sjekk mot lønnsslippen.</p>
         </section>
         <section class="panel" id="warnPanel">
           <h2>Varsler denne måneden</h2>
@@ -144,14 +147,13 @@
         </section>
         <section class="panel" aria-labelledby="payslipTitle">
           <h2 id="payslipTitle">Sjekk mot lønnsslippen</h2>
-          <p class="small muted">Skriv inn brutto fra lønnsslippen for vaktene denne måneden, så ser du om du har fått riktig betalt. Mange får timer og tillegg utbetalt måneden etter, så sammenlign med slippen som gjelder disse vaktene.</p>
+          <p class="small muted">Skriv inn brutto fra slippen som gjelder vaktene denne måneden. Ofte er det slippen måneden etter.</p>
           <div id="payslipList"></div>
         </section>
         <section class="panel">
           <h2>Eksporter og timelister</h2>
           <div class="row exports">
-            <button class="btn" id="csvBtn" type="button">Last ned regneark (CSV)</button>
-            <button class="btn" id="icsBtn" type="button">Legg i kalenderen (.ics)</button>
+            <button class="btn" id="exportMonthBtn" type="button" data-action="open-export" data-period="month">Eksporter vaktene</button>
           </div>
           <div class="row exports">
             <select id="sheetEmp" class="inline-select" aria-label="Timeliste for"></select>
@@ -194,6 +196,19 @@
     <div id="v-konto" role="tabpanel" aria-labelledby="t-konto" hidden>
       <section class="panel" id="accountPanel"></section>
 
+      <section class="panel" id="feedPanel" hidden>
+        <h2>Vaktene i kalenderen din</h2>
+        <p class="small muted">Vaktene dukker opp i iPhone-, Google- eller Outlook-kalenderen av seg selv. Google kan bruke opptil et døgn.</p>
+        <div id="feedBody"></div>
+        <details class="howto">
+          <summary>Slik legger du lenken inn</summary>
+          <p><b>iPhone:</b> Kopier lenken. Innstillinger → <i>Apper</i> → <i>Kalender</i> → <i>Kalenderkontoer</i> → <i>Legg til konto</i> → <i>Annet</i> → <i>Legg til abonnert kalender</i> → lim inn.</p>
+          <p><b>Google Kalender</b> (på PC): <i>Andre kalendere</i> → <b>+</b> → <i>Fra nettadresse</i> → lim inn lenken.</p>
+          <p><b>Outlook:</b> <i>Legg til kalender</i> → <i>Abonner fra nettet</i> → lim inn lenken.</p>
+          <p class="small muted">Alle med lenken ser tidspunkter og arbeidsgivere, ikke notater. Del den ikke. En ny lenke stenger den gamle.</p>
+        </details>
+      </section>
+
       <section class="panel">
         <h2>Innstillinger</h2>
         <form id="settingsForm" class="settings">
@@ -206,23 +221,23 @@
             </select>
           </div>
           <div class="set-row">
-            <div><label for="sTax">Standard skattetrekk</label><p class="help" id="taxHelp">Brukes for arbeidsgivere uten eget valg. Prosent- eller tabelltrekk kan settes per arbeidsgiver.</p></div>
+            <div><label for="sTax">Standard skattetrekk</label><p class="help" id="taxHelp">Gjelder arbeidsgivere uten eget skattevalg.</p></div>
             <div class="unit"><input type="number" id="sTax" min="0" max="60" step="0.5" inputmode="decimal" placeholder="0" aria-describedby="taxHelp"><span>%</span></div>
           </div>
 
           <h3 class="set-head">Varsler</h3>
           <div class="set-row">
-            <div><label for="sRest">Minste hviletid mellom vakter</label><p class="help">Arbeidsmiljøloven bruker 11 timer som hovedregel.</p></div>
+            <div><label for="sRest">Minste hviletid mellom vakter</label><p class="help">Loven sier 11 timer som hovedregel.</p></div>
             <div class="unit"><input type="number" id="sRest" min="0" max="24" step="0.5" inputmode="decimal"><span>timer</span></div>
           </div>
           <div class="set-row">
-            <div><label for="sWeek">Varsle når uka passerer</label><p class="help">Samlet hos alle arbeidsgivere. 48 timer er vanlig grense.</p></div>
+            <div><label for="sWeek">Varsle når uka passerer</label><p class="help">Samlet for alle arbeidsgivere.</p></div>
             <div class="unit"><input type="number" id="sWeek" min="1" max="168" step="1" inputmode="numeric"><span>timer</span></div>
           </div>
 
           <h3 class="set-head">Frikort</h3>
           <div class="set-row">
-            <div><label for="sFkOn">Jeg har frikort i år</label><p class="help">Ingen skattetrekk opp til grensen. Vaktbok viser hvor mye som er igjen under Oversikt.</p></div>
+            <div><label for="sFkOn">Jeg har frikort i år</label><p class="help">Ingen trekk opp til grensen. Se hvor mye som er igjen under Oversikt.</p></div>
             <input type="checkbox" id="sFkOn" class="switch">
           </div>
           <div id="sFkFields" hidden>
@@ -231,11 +246,11 @@
               <div class="unit"><input type="number" id="sFkLimit" min="0" step="1000" inputmode="numeric" placeholder="100000"><span>kr</span></div>
             </div>
             <div class="set-row">
-              <div><label for="sFkOther">Inntekt i år utenfor Vaktbok</label><p class="help" id="fkHelp">Lønn før du begynte med Vaktbok, og feriepenger som utbetales i år. Begge teller mot frikortet.</p></div>
+              <div><label for="sFkOther">Inntekt i år utenfor Vaktbok</label><p class="help" id="fkHelp">For eksempel lønn fra før du begynte med Vaktbok, og feriepenger.</p></div>
               <div class="unit"><input type="number" id="sFkOther" min="0" step="100" inputmode="numeric" placeholder="0" aria-describedby="fkHelp"><span>kr</span></div>
             </div>
             <div class="set-row">
-              <div><label for="sFkNew">Jeg har bestilt skattekort for inntekt over grensen</label><p class="help">Da trekkes prosenten på kortet i stedet for 50 % når grensen er nådd.</p></div>
+              <div><label for="sFkNew">Jeg har bestilt skattekort for inntekt over grensen</label><p class="help">Da trekkes prosenten på kortet, ikke 50 %, over grensen.</p></div>
               <input type="checkbox" id="sFkNew" class="switch">
             </div>
             <div class="set-row" id="sFkNewBox" hidden>
@@ -253,19 +268,25 @@
         <div class="row">
           <button class="btn" id="exportBtn" type="button">Last ned alle data</button>
           <button class="btn" type="button" id="importBtn2" aria-describedby="importHelp">Importer vakter</button>
+          <button class="btn" type="button" data-action="open-export">Eksporter vakter</button>
           <button class="btn" id="demoBtn" type="button" hidden>Prøv med eksempeldata</button>
         </div>
-        <p class="help" id="importHelp">Fra kalenderlenke (iPhone, Google, Outlook, byråets vaktplan), kalenderfil (.ics), regneark (.csv) eller en sikkerhetskopi fra Vaktbok (.json).</p>
+        <p class="help" id="importHelp">Import fra kalender, regneark, innlimt tekst eller sikkerhetskopi. Eksport til kalender eller regneark.</p>
         <div class="row">
           <button class="btn danger" id="wipeBtn" type="button">Slett alle vakter og arbeidsgivere</button>
           <button class="btn danger" id="deleteAccountBtn" type="button" hidden>Slett kontoen min</button>
         </div>
         <p class="small"><a href="personvern.html">Personvernerklæring</a></p>
       </section>
+      <section class="panel">
+        <h2>Tilbakemelding</h2>
+        <p class="small muted">Fant du en feil, eller savner du noe? Si ifra.</p>
+        <div class="row"><button class="btn" type="button" data-action="open-feedback">Gi tilbakemelding</button></div>
+      </section>
     </div>
   </main>
   <footer class="foot small muted">
-    <span class="foot-links"><a href="#om" data-action="show-landing">Om Vaktbok</a><a href="personvern.html">Personvern</a><a id="contactLink" hidden></a></span>
+    <span class="foot-links"><a href="#om" data-action="show-landing">Om Vaktbok</a><a href="#" data-action="open-feedback">Gi tilbakemelding</a><a href="personvern.html">Personvern</a><a id="contactLink" hidden></a></span>
     <span>Lønn og skatt er estimater. Sjekk alltid mot lønnsslippen.</span>
   </footer>
 </div>
@@ -277,6 +298,10 @@
     <div class="grid">
       <label class="span2">Arbeidsgiver<select id="fEmp" required></select></label>
       <label class="span2">Dato<input type="date" id="fDate" required></label>
+      <div class="span2 set-row offered-row">
+        <div><label for="fOffered">Tilbudt, ikke tatt ennå</label><p class="help">Telles ikke før du tar den.</p></div>
+        <input type="checkbox" id="fOffered" class="switch">
+      </div>
       <label>Start<input type="time" id="fStart" required></label>
       <label>Slutt<input type="time" id="fEnd" required></label>
       <label class="span2" id="fFeeL">Honorar for oppdraget (kr)
@@ -286,7 +311,7 @@
       <details class="span2 fixedpay" id="fFixedBox">
         <summary>Fast beløp for denne vakta (valgfritt)</summary>
         <label>Beløp (kr)<input type="number" id="fFixed" min="0" step="1" inputmode="decimal" placeholder="F.eks. 3000"></label>
-        <span class="help">Fyll inn hvis vakta betales med et avtalt beløp i stedet for timelønn og tillegg.</span>
+        <span class="help">Hvis vakta har et avtalt beløp i stedet for timelønn.</span>
       </details>
       <label class="span2">Ubetalt pause (minutter)<input type="number" id="fBreak" min="0" max="600" step="5" value="0" inputmode="numeric"></label>
       <div class="span2 repeat" id="repeatFields">
@@ -309,7 +334,7 @@
       <p class="help span2 series-info" id="seriesInfo" hidden></p>
       <label class="span2">Notat (valgfritt)
         <input type="text" id="fNote" maxlength="200" placeholder="F.eks. avdeling eller vaktkode" aria-describedby="noteHelp">
-        <span class="help" id="noteHelp">Ikke skriv navn eller opplysninger om andre personer, som pasienter, brukere eller kunder.</span>
+        <span class="help" id="noteHelp">Ikke skriv navn eller opplysninger om andre.</span>
       </label>
     </div>
     <div class="preview" id="preview" aria-live="polite"></div>
@@ -347,7 +372,7 @@
 
     <fieldset id="rulesBox">
       <legend>Tillegg</legend>
-      <p class="help">Legg inn tilleggene fra arbeidsavtalen eller tariffen din. Flere tillegg kan gjelde samtidig, for eksempel kveld og helg.</p>
+      <p class="help">Fra arbeidsavtalen eller tariffen. Flere kan gjelde samtidig.</p>
       <div id="ruleList"></div>
       <div class="row">
         <button class="btn" type="button" id="addRuleBtn">Legg til tillegg</button>
@@ -356,14 +381,16 @@
       </div>
     </fieldset>
 
-    <fieldset id="otBox">
+    <details class="more" id="empMore">
+      <summary>Flere valg: overtid, skatt, skjul</summary>
+      <fieldset id="otBox">
       <legend>Overtid</legend>
       <label class="check"><input type="checkbox" id="eOtOn"> Beregn overtid</label>
       <div class="grid three" id="otFields">
         <label>Per dag, etter (timer)<input type="number" id="eOtAfter" min="1" max="24" step="0.5" inputmode="decimal" placeholder="Av"></label>
         <label>Per uke, etter (timer)<input type="number" id="eOtWeek" min="1" max="100" step="0.5" inputmode="decimal" placeholder="Av"></label>
         <label>Tillegg (%)<input type="number" id="eOtPct" min="0" max="300" step="1" inputmode="numeric"></label>
-        <p class="help span-all">Arbeidsmiljøloven regner som hovedregel arbeid over 9 timer i døgnet eller 40 timer i uka som overtid, med minst 40 % tillegg. Tom grense betyr av. Overtid regnes per arbeidsgiver. Er du deltidsansatt, er timer utover stillingen din vanligvis <em>merarbeid</em> uten overtidstillegg, helt til du passerer grensene over. Tariffavtaler kan ha andre regler, så spør arbeidsgiveren hvis du er usikker.</p>
+        <p class="help span-all">Loven regner som hovedregel over 9 timer i døgnet eller 40 i uka som overtid, med minst 40 % tillegg. Tom grense betyr av. Deltid: timer utover stillingen er ofte <em>merarbeid</em> uten tillegg. Sjekk avtalen din.</p>
       </div>
     </fieldset>
 
@@ -388,6 +415,7 @@
     </fieldset>
 
     <label class="check"><input type="checkbox" id="eArchived"> Skjul ved ny vakt (tidligere vakter beholdes)</label>
+    </details>
 
     <ul class="errors" id="empErrors" role="alert"></ul>
     <div class="dialog-actions">
@@ -407,6 +435,7 @@
     <div id="impSource">
       <div class="sources">
         <button type="button" class="source" data-src="link"><b>Kalenderlenke</b><span>Fra iPhone og iCloud, Google, Outlook eller vaktplanen til et byrå. Kan hentes på nytt senere.</span></button>
+        <button type="button" class="source" data-src="ai"><b>Lim inn tekst</b><span>Fra en SMS, e-post eller vaktliste.</span></button>
         <button type="button" class="source" data-src="file"><b>Fil</b><span>Kalenderfil (.ics) fra e-post, regneark (.csv) fra Excel eller Numbers, eller sikkerhetskopi fra Vaktbok (.json).</span></button>
       </div>
       <input type="file" id="impFile" class="sr-only" tabindex="-1" aria-hidden="true">
@@ -425,8 +454,13 @@
         <p><b>iPhone, kalender du abonnerer på</b> (for eksempel fra et byrå): Innstillinger → <i>Apper</i> → <i>Kalender</i> → <i>Kalenderkontoer</i> → <i>Abonnerte kalendere</i> → velg kalenderen → kopier adressen i <i>Tjener</i>.</p>
         <p><b>Google Kalender:</b> På PC: Innstillinger → velg kalenderen → <i>Hemmelig adresse i iCal-format</i>.</p>
         <p><b>Outlook:</b> Innstillinger → Kalender → <i>Delte kalendere</i> → <i>Publiser en kalender</i> → kopier ICS-lenken.</p>
-        <p class="small muted">En offentlig iCloud-kalender kan ses av alle som har lenken. Lag gjerne en egen kalender bare for vakter. Vaktbok lagrer lenken i kontoen din, og bare du kan se den.</p>
+        <p class="small muted">Alle med lenken kan se kalenderen, så bruk gjerne en egen kalender bare for vakter.</p>
       </details>
+    </div>
+
+    <div id="impAi" hidden>
+      <label>Tekst<textarea id="impAiText" rows="7" maxlength="20000" placeholder="For eksempel: Kan du ta natt 12/11 22–07.30 på Junibakken?"></textarea></label>
+      <p class="help">Vaktbok finner datoer og klokkeslett, og du godkjenner. Teksten sendes ingen steder.</p>
     </div>
 
     <div id="impCols" hidden>
@@ -445,7 +479,7 @@
 
       <div id="impGroupsWrap" hidden>
         <h3>Hvilke hendelser er vakter?</h3>
-        <p class="help">Hendelsene er samlet etter navn. Kryss av for det som er vakter, og velg arbeidsgiver. «Ny arbeidsgiver» oppretter den når du importerer.</p>
+        <p class="help">Kryss av for det som er vakter, og velg arbeidsgiver.</p>
         <div class="row" id="impGroupTools">
           <input type="search" id="impGroupSearch" placeholder="Søk etter navn" aria-label="Søk i hendelser" class="grow">
           <button type="button" class="btn link" data-gall="1">Alle</button>
@@ -461,6 +495,7 @@
         <div class="imp-list" id="impList"></div>
       </details>
       <label class="check" id="impSaveL"><input type="checkbox" id="impSave" checked> Lagre lenken, så du kan hente nye vakter senere</label>
+      <label class="check"><input type="checkbox" id="impOffered"> Importer som tilbudte vakter (ikke tatt ennå)</label>
     </div>
 
     <ul class="errors" id="impErrors" role="alert"></ul>
@@ -470,6 +505,58 @@
       <button class="btn" type="button" data-close>Avbryt</button>
       <button class="btn primary" type="button" id="impNext" hidden>Hent kalender</button>
       <button class="btn primary" type="submit" id="impGo" hidden>Importer</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Eksport -->
+<dialog id="exportDialog" aria-labelledby="expTitle">
+  <form method="dialog" id="expForm" novalidate>
+    <h2 id="expTitle">Eksporter vakter</h2>
+    <div class="seg exp-fmt" role="radiogroup" aria-label="Format">
+      <button type="button" role="radio" data-fmt="ics" aria-checked="true">Kalender (.ics)</button>
+      <button type="button" role="radio" data-fmt="csv" aria-checked="false">Regneark (.csv)</button>
+    </div>
+    <p class="help" id="expFmtHelp"></p>
+    <label>Periode
+      <select id="expPeriod">
+        <option value="future">Fra i dag og fremover</option>
+        <option value="month">Måneden i Oversikt</option>
+        <option value="range">Velg datoer</option>
+        <option value="all">Alle vakter</option>
+      </select>
+    </label>
+    <div class="grid" id="expRange" hidden>
+      <label>Fra<input type="date" id="expFrom"></label>
+      <label>Til<input type="date" id="expTo"></label>
+    </div>
+    <label>Arbeidsgiver<select id="expEmp"></select></label>
+    <p class="exp-count" id="expCount" aria-live="polite"></p>
+    <div class="dialog-actions"><span class="spacer"></span>
+      <button class="btn" type="button" data-close>Avbryt</button>
+      <button class="btn primary" type="submit" id="expGo">Last ned</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Tilbakemelding -->
+<dialog id="feedbackDialog" aria-labelledby="fbTitle">
+  <form method="dialog" id="fbForm" novalidate>
+    <h2 id="fbTitle">Gi tilbakemelding</h2>
+    <div class="seg fb-kind" role="radiogroup" aria-label="Type">
+      <button type="button" role="radio" data-fb="feil" aria-checked="true">Feil</button>
+      <button type="button" role="radio" data-fb="forslag" aria-checked="false">Forslag</button>
+      <button type="button" role="radio" data-fb="annet" aria-checked="false">Annet</button>
+    </div>
+    <label>Hva vil du si?<textarea id="fbMessage" rows="6" maxlength="4000" required placeholder="Beskriv hva som skjedde, eller hva du savner."></textarea></label>
+    <label>E-post (valgfritt, hvis du vil ha svar)<input type="email" id="fbEmail" autocomplete="email"></label>
+    <label class="check"><input type="checkbox" id="fbMeta" checked> Ta med teknisk informasjon (nettleser, skjermstørrelse, versjon)</label>
+    <input type="text" name="website" id="fbWebsite" tabindex="-1" autocomplete="off" class="sr-only" aria-hidden="true">
+    <p class="help">Ikke skriv navn eller opplysninger om andre personer.</p>
+    <ul class="errors" id="fbErrors" role="alert"></ul>
+    <div class="dialog-actions"><span class="spacer"></span>
+      <button class="btn" type="button" data-close>Avbryt</button>
+      <button class="btn primary" type="submit" id="fbSend">Send</button>
     </div>
   </form>
 </dialog>

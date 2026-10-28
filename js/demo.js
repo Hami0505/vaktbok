@@ -3,7 +3,7 @@ import { isoDate, parseShift, mondayOf, HOUR } from './logic.js';
 
 const NAMES = ['Bemanningsbyrå', 'Vikarbyrå', 'Sykehjem', 'Bofellesskap', 'Hjemmetjenesten', 'Kafé',
   'Restaurant', 'Butikk', 'Lager', 'Hotell', 'Kino', 'Treningssenter'];
-const COLORS = ['#1F6F6B', '#B3572C', '#7A4FB3', '#2C6FB3', '#3D8B3D', '#A8326E'];
+const COLORS = ['#1F6F6B', '#B3572C', '#7A4FB3', '#2C6FB3', '#2E7D32', '#A8326E'];
 const TYPES = [
   ['07:30', '15:30', 30], ['08:00', '16:00', 30], ['07:00', '15:00', 30], // dag
   ['15:00', '22:30', 30], ['14:30', '22:00', 30],                           // kveld

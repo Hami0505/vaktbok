@@ -571,3 +571,26 @@ input.switch:checked::after { transform: translateX(18px); }
 }
 /* Bunnteksten starter under skjermkanten, så den ikke hopper når innholdet lastes. */
 main, .landing:not([hidden]) { min-height: 100vh; }
+
+/* Tilbudte vakter */
+.track .bar.offered { background: repeating-linear-gradient(135deg, var(--card) 0 5px, transparent 5px 10px) !important; border: 2px dashed var(--emp-c); color: var(--ink) !important; }
+.badge { display: inline-block; font-size: .72rem; font-weight: 700; border-radius: 999px; padding: 1px 8px; margin-left: 6px; background: var(--warn-bg); color: var(--warn); vertical-align: 1px; }
+.item.offered .when, .item.offered .who { opacity: .85; }
+.offered-row { padding: 6px 0; border-top: 0; }
+.weeksum .offered-note { flex-basis: 100%; font-size: .85rem; margin-top: -6px; }
+textarea { font: inherit; color: var(--ink); background: var(--paper); border: 1px solid var(--control); border-radius: 8px; padding: 9px 10px; width: 100%; resize: vertical; }
+.fb-kind { display: flex; width: 100%; margin: 0 0 12px; }
+.fb-kind button { flex: 1; }
+.feed-link { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+.feed-link input { flex: 1 1 260px; font-size: .85rem !important; font-family: ui-monospace, monospace; }
+#feedbackDialog label, #impAi label { margin-top: 10px; }
+.btn.small-btn { padding: 5px 12px; font-size: .88rem; min-height: 0; }
+
+.google-btn { width: 100%; max-width: 360px; justify-content: center; gap: 10px; font-weight: 700; }
+.google-btn span { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--ink); color: var(--card); font-size: .8rem; }
+.or { margin: 10px 0 6px; }
+
+details.more { margin: 14px 0 4px; border-top: 1px solid var(--line); padding-top: 10px; }
+details.more > summary { cursor: pointer; font-weight: 700; padding: 6px 0; color: var(--accent); }
+details.more[open] > summary { margin-bottom: 6px; }
+.exp-fmt { display: flex; width: 100%; margin-bottom: 4px; } .exp-fmt button { flex: 1; } .exp-count { font-weight: 700; margin: 14px 0 0; } #exportDialog label { margin-top: 10px; }

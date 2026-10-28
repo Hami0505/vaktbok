@@ -22,11 +22,11 @@ const emptyData = () => ({ employers: [], shifts: [], settings: { ...DEFAULT_SET
 // Radkonvertering app <-> database
 const toRow = {
   employers: (e, uid) => ({ id: e.id, user_id: uid, name: e.name, color: e.color, rate: e.rate, rules: e.rules || [], overtime: e.overtime || null, archived: !!e.archived, pay: e.pay || null }),
-  shifts: (s, uid) => ({ id: s.id, user_id: uid, employer_id: s.employerId, date: s.date, start_time: s.start, end_time: s.end, break_min: s.breakMin || 0, note: s.note || '', series_id: s.seriesId || null, fee: s.fee === '' || s.fee == null ? null : Number(s.fee) }),
+  shifts: (s, uid) => ({ id: s.id, user_id: uid, employer_id: s.employerId, date: s.date, start_time: s.start, end_time: s.end, break_min: s.breakMin || 0, note: s.note || '', series_id: s.seriesId || null, fee: s.fee === '' || s.fee == null ? null : Number(s.fee), status: s.status === 'offered' ? 'offered' : null }),
 };
 const fromRow = {
   employers: r => ({ id: r.id, name: r.name, color: r.color, rate: Number(r.rate), rules: r.rules || [], overtime: r.overtime, archived: r.archived, pay: r.pay || null }),
-  shifts: r => ({ id: r.id, employerId: r.employer_id, date: r.date, start: r.start_time.slice(0, 5), end: r.end_time.slice(0, 5), breakMin: r.break_min, note: r.note || '', seriesId: r.series_id || null, fee: r.fee == null ? null : Number(r.fee) }),
+  shifts: r => ({ id: r.id, employerId: r.employer_id, date: r.date, start: r.start_time.slice(0, 5), end: r.end_time.slice(0, 5), breakMin: r.break_min, note: r.note || '', seriesId: r.series_id || null, fee: r.fee == null ? null : Number(r.fee), status: r.status || null }),
 };
 
 export class Store extends EventTarget {
@@ -100,7 +100,7 @@ export class Store extends EventTarget {
 
   useScope(user) {
     if ((user && user.id) !== (this.user && this.user.id)) this.profile = null;
-    this.user = user ? { id: user.id, email: user.email } : null;
+    this.user = user ? { id: user.id, email: user.email, name: user.user_metadata?.full_name || user.user_metadata?.name || '' } : null;
     if (this.sb) this.user ? this.subscribe() : this.unsubscribe();
     this.data = { ...emptyData(), ...read(K.data(this.scope), {}) };
     this.data.settings = { ...DEFAULT_SETTINGS, ...this.data.settings };
@@ -237,7 +237,7 @@ export class Store extends EventTarget {
           strip();
           res = await this.sb.from(table).upsert(rows);
           for (let tries = 0; res.error && tries < 3; tries++) {
-            const col = ['series_id', 'fee', 'pay'].find(c => new RegExp(`\\b${c}\\b`).test(res.error.message || ''));
+            const col = ['series_id', 'fee', 'pay', 'status'].find(c => new RegExp(`\\b${c}\\b`).test(res.error.message || ''));
             if (!col || this.missingCols.has(col)) break;
             this.missingCols.add(col); this.emit('status'); strip();
             res = await this.sb.from(table).upsert(rows);
@@ -312,6 +312,39 @@ export class Store extends EventTarget {
     return clean;
   }
 
+  // ---------- Kalenderabonnement (supabase/functions/calendar) ----------
+  async getFeed() {
+    const { data, error } = await this.sb.from('calendar_feeds').select('token').maybeSingle();
+    if (error) throw new Error(error.message);
+    return data?.token || null;
+  }
+  async newFeed() {
+    const bytes = crypto.getRandomValues(new Uint8Array(24));
+    const token = [...bytes].map(b => b.toString(16).padStart(2, '0')).join('');
+    const { error } = await this.sb.from('calendar_feeds').upsert({ user_id: this.user.id, token });
+    if (error) throw new Error(error.message);
+    return token;
+  }
+  async deleteFeed() {
+    const { error } = await this.sb.from('calendar_feeds').delete().eq('user_id', this.user.id);
+    if (error) throw new Error(error.message);
+  }
+  feedUrl(token) {
+    return `${this.config.supabaseUrl.replace(/^https:/, 'webcal:')}/functions/v1/calendar?t=${token}`;
+  }
+
+  // ---------- Tilbakemelding (supabase/functions/feedback) ----------
+  async sendFeedback(payload) {
+    if (!this.sb) throw new Error('no-server');
+    const { error } = await this.sb.functions.invoke('feedback', { body: payload });
+    if (error) {
+      let code = 'failed';
+      try { code = (await error.context.json()).error || code; } catch { }
+      if (error.context && error.context.status === 404) code = 'no-function';
+      throw new Error(code);
+    }
+  }
+
   // Henter en kalender via serverfunksjonen ics-proxy (supabase/functions/ics-proxy). Krever innlogging.
   async fetchCalendar(url) {
     if (!this.sb || !this.user) throw new Error('login-required');
@@ -324,6 +357,13 @@ export class Store extends EventTarget {
     }
     if (!data || typeof data.text !== 'string') throw new Error('failed');
     return data.text;
+  }
+
+  // Innlogging med Google (eller annen leverandør satt opp i Supabase → Authentication → Providers).
+  async signInWithProvider(provider) {
+    if (!this.sb) throw new Error('no-server');
+    const { error } = await this.sb.auth.signInWithOAuth({ provider, options: { redirectTo: location.origin + location.pathname } });
+    if (error) throw new Error(error.message);
   }
 
   async sendCode(email) {

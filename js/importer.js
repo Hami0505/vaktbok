@@ -20,10 +20,13 @@ export function setupImporter(ctx) {
 
   // ---------- Visning av steg ----------
   function show(step) {
-    for (const id of ['impSource', 'impLink', 'impCols', 'impPreview']) $(id).hidden = true;
+    for (const id of ['impSource', 'impLink', 'impAi', 'impCols', 'impPreview']) $(id).hidden = true;
     for (const id of step) $(id).hidden = false;
+    st.step = step[0];
     $('impBack').hidden = step.includes('impSource');
-    $('impNext').hidden = !step.includes('impLink') || step.includes('impPreview');
+    $('impNext').hidden = !(step.includes('impLink') || step.includes('impAi')) || step.includes('impPreview');
+    $('impNext').textContent = step.includes('impAi') ? 'Finn vakter' : 'Hent vakter';
+    $('impNext').disabled = false;
     $('impGo').hidden = !step.includes('impPreview');
     $('impErrors').innerHTML = '';
   }
@@ -132,11 +135,12 @@ export function setupImporter(ctx) {
     $('impGroupSearch').value = '';
     $('impSaveL').hidden = !st.link;
     $('impSave').checked = true;
-    $('impDetails').open = !ics;
+    $('impOffered').checked = false;
+    $('impDetails').open = !ics && !st.ai;
     st.choice = new Map();
     st.groups = new Map();
     st.savedGroups = saved?.groups || {};
-    show(ics ? ['impPreview'] : ['impCols', 'impPreview']);
+    show(ics || st.ai ? ['impPreview'] : ['impCols', 'impPreview']);
     updatePreview();
   }
 
@@ -255,7 +259,8 @@ export function setupImporter(ctx) {
     const newNames = [...new Set(shifts.filter(s => s.checked && String(s.employerId).startsWith('new:')).map(s => s.employerId.slice(4)))];
     const missing = st.kind === 'ics' ? [...st.groups.values()].filter(g => g.on && g.count && g.emp === '__custom').map(g => g.title) : [];
     st.missingNames = missing;
-    $('impSummary').innerHTML = (missing.length ? `<p class="flag block rest">Skriv navn på den nye arbeidsgiveren for ${esc(missing.map(t => `«${t}»`).join(', '))}.</p>` : '')
+    $('impSummary').innerHTML = (st.ai ? '<p class="small muted">Sjekk datoer og klokkeslett før du importerer.</p>' : '')
+      + (missing.length ? `<p class="flag block rest">Skriv navn på den nye arbeidsgiveren for ${esc(missing.map(t => `«${t}»`).join(', '))}.</p>` : '')
       + (shifts.length ? '' : `<p><b>Ingen vakter valgt.</b>${st.kind === 'ics' ? ' Kryss av for hendelsene som er vakter.' : ''}</p>`)
       + (newNames.length ? `<p class="small">Nye arbeidsgivere opprettes: <b>${esc(newNames.join(', '))}</b>. Timelønn settes til 0 kr, så legg den inn under Arbeidsgivere etterpå.</p>` : '')
       + (why.length ? `<p class="small muted">Hoppes over: ${esc(why.join(', '))}.</p>` : '');
@@ -290,7 +295,7 @@ export function setupImporter(ctx) {
     const chosen = (st.result?.shifts || []).filter(s => s.checked);
     if (!chosen.length) return;
     const created = new Map();
-    const COLORS = ['#1F6F6B', '#7A4FB3', '#B3572C', '#2C6FB3', '#3D8B3D', '#A8326E'];
+    const COLORS = ['#1F6F6B', '#7A4FB3', '#B3572C', '#2C6FB3', '#2E7D32', '#A8326E'];
     for (const s of chosen) {
       if (String(s.employerId).startsWith('new:') && !created.has(s.employerId)) {
         const name = s.employerId.slice(4).slice(0, 60) || 'Arbeidsgiver';
@@ -299,7 +304,8 @@ export function setupImporter(ctx) {
       }
     }
     const newEmps = [...created.values()].filter(e => e.isNew).map(({ isNew, ...e }) => e);
-    const shifts = chosen.map(({ checked, title, ...s }) => ({ ...s, employerId: created.get(s.employerId)?.id || s.employerId }));
+    const offered = $('impOffered').checked ? 'offered' : null;
+    const shifts = chosen.map(({ checked, title, ...s }) => ({ ...s, status: offered, employerId: created.get(s.employerId)?.id || s.employerId }));
     store.addAll({ employers: newEmps, shifts });
     if (st.link && $('impSave').checked) {
       const groups = {};
@@ -358,10 +364,29 @@ export function setupImporter(ctx) {
     return true;
   }
 
+  // ---------- Lim inn tekst: finn vakter lokalt, uten å sende noe ----------
+  function showAi() {
+    show(['impAi']);
+    $('impAiText').value = '';
+    $('impAiText').focus();
+  }
+  function runPaste() {
+    const text = $('impAiText').value.trim();
+    if (!text) { error('Lim inn teksten først.'); $('impAiText').focus(); return; }
+    const res = L.parseShiftText(text, { today: new Date(), employers: D().employers.filter(e => !e.archived).map(e => e.name) });
+    if (!res.shifts.length) { error(res.comment); return; }
+    st.kind = 'csv'; st.link = null; st.ai = { comment: '' };
+    st.rows = L.textToRows(res);
+    setupColumns();
+    preparePreview();
+  }
+
   // ---------- Hendelser ----------
   $('impSource').addEventListener('click', async ev => {
     const src = ev.target.closest('[data-src]');
+    if (src) st.ai = null;
     if (src?.dataset.src === 'link') showLink();
+    if (src?.dataset.src === 'ai') showAi();
     if (src?.dataset.src === 'file') $('impFile').click();
     const r = ev.target.closest('[data-refresh]');
     if (r) { const l = D().settings.calendarLinks[Number(r.dataset.refresh)]; if (l) { show(['impLink']); $('impUrl').value = l.url; $('impLinkName').value = l.name || ''; await fetchLink({ url: l.url, name: l.name }, l); } }
@@ -373,6 +398,7 @@ export function setupImporter(ctx) {
   });
   $('impFile').addEventListener('change', async ev => { const f = ev.target.files[0]; ev.target.value = ''; await readFile(f); });
   $('impNext').addEventListener('click', () => {
+    if (st.step === 'impAi') { runPaste(); return; }
     const url = $('impUrl').value.trim();
     if (!url) { error('Lim inn lenken til kalenderen først.'); $('impUrl').focus(); return; }
     if (!/^(webcals?|https?):\/\//i.test(url)) { error(LINK_ERRORS['invalid-url']); return; }

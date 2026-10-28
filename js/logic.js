@@ -152,7 +152,7 @@ export function calcAll(shifts, employers) {
     const c = calcShift(s, emp);
     out.set(s.id, c);
     const weekH = Number(emp?.overtime?.weekH);
-    if (weekH > 0) {
+    if (weekH > 0 && !isOffered(s)) {
       const { year, week } = isoWeek(c.start);
       const k = `${s.employerId}|${year}-${week}`;
       if (!byEmpWeek.has(k)) byEmpWeek.set(k, { limit: weekH, list: [] });
@@ -177,6 +177,12 @@ export function calcAll(shifts, employers) {
   }
   return out;
 }
+
+// ---------- Status på vakter ----------
+// status: 'offered' (tilbudt, ikke tatt ennå) eller tom/'confirmed' (bekreftet). Tilbudte vakter vises,
+// men telles ikke i timer, lønn, frikort, eksport eller varsler før de er tatt.
+export const isOffered = s => s?.status === 'offered';
+export const counted = s => !isOffered(s);
 
 // ---------- Skatt og netto ----------
 // emp.pay.tax = { mode: 'default' | 'pct' | 'table' | 'freeOrg', pct, slipGross, slipTax }
@@ -207,7 +213,7 @@ export function applyTax(all, shifts, employers, settings = DEFAULT_SETTINGS) {
   const orgYear = new Map();
   for (const s of shifts) {
     const e = empOf(s.employerId);
-    if (e?.pay?.tax?.mode !== 'freeOrg') continue;
+    if (e?.pay?.tax?.mode !== 'freeOrg' || isOffered(s)) continue;
     const k = `${s.employerId}|${s.date.slice(0, 4)}`;
     orgYear.set(k, (orgYear.get(k) || 0) + (all.get(s.id)?.pay || 0));
   }
@@ -215,6 +221,7 @@ export function applyTax(all, shifts, employers, settings = DEFAULT_SETTINGS) {
   const sorted = [...shifts].sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
   for (const s of sorted) {
     const c = all.get(s.id); if (!c) continue;
+    if (isOffered(s)) { c.tax = 0; c.net = c.pay; continue; }
     const e = empOf(s.employerId), y = s.date.slice(0, 4);
     const freeOrg = e?.pay?.tax?.mode === 'freeOrg' && (orgYear.get(`${s.employerId}|${y}`) || 0) <= FREE_ORG_LIMIT;
     let tax = 0;
@@ -246,7 +253,7 @@ export function frikortStatus(shifts, employers, settings, year, todayIso) {
   const limit = Number(fk.limit) || FRIKORT_DEFAULT;
   let earned = Number(fk.otherIncome) || 0, planned = 0;
   for (const s of shifts) {
-    if (!s.date.startsWith(`${year}-`)) continue;
+    if (!s.date.startsWith(`${year}-`) || isOffered(s)) continue;
     const c = all.get(s.id); if (!c || c.taxFree) continue;
     if (s.date <= todayIso) earned += c.pay; else planned += c.pay;
   }
@@ -275,9 +282,10 @@ export function countsForWarnings(s, employers) {
   const emp = employers.find(e => e.id === s.employerId);
   return !(payType(emp) === 'volunteer' && emp.pay?.inWarnings === false);
 }
-export function restWarnings(shifts, employers, minRestH) {
-  const w = checkRest(shifts, minRestH);
-  const byId = new Map(shifts.map(s => [s.id, s]));
+export function restWarnings(shifts, employers, minRestH, alsoInclude = null) {
+  const list = shifts.filter(s => counted(s) || (alsoInclude && s.id === alsoInclude));
+  const w = checkRest(list, minRestH);
+  const byId = new Map(list.map(s => [s.id, s]));
   for (const [id, x] of Object.entries(w)) {
     if (x.type === 'rest' && (!countsForWarnings(byId.get(id), employers) || !countsForWarnings(byId.get(x.with), employers))) { delete w[id]; continue; }
     x.sameEmployer = byId.get(id)?.employerId === byId.get(x.with)?.employerId;
@@ -289,7 +297,7 @@ export function restWarnings(shifts, employers, minRestH) {
 export function weeklyOverLimit(shifts, employers, limitH = DEFAULT_SETTINGS.weekLimitH) {
   const byWeek = {};
   for (const s of shifts) {
-    if (!countsForWarnings(s, employers)) continue;
+    if (!countsForWarnings(s, employers) || isOffered(s)) continue;
     const emp = employers.find(e => e.id === s.employerId);
     const { year, week } = isoWeek(parseDate(s.date));
     const k = `${year}-U${pad(week)}`;
@@ -458,8 +466,8 @@ export function validateRepeat(rule, start) {
 
 // ---------- Oppsummering og eksport ----------
 
-export function shiftsInMonth(shifts, ym) {
-  return shifts.filter(s => s.date.startsWith(ym))
+export function shiftsInMonth(shifts, ym, { includeOffered = false } = {}) {
+  return shifts.filter(s => s.date.startsWith(ym) && (includeOffered || counted(s)))
     .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
 }
 
@@ -498,7 +506,7 @@ export function yearSummary(shifts, employers, year, settings = DEFAULT_SETTINGS
   const byEmp = {};
   const total = { hours: 0, pay: 0, net: 0, count: 0, holidayBase: 0 };
   for (const s of shifts) {
-    if (!s.date.startsWith(`${year}-`)) continue;
+    if (!s.date.startsWith(`${year}-`) || isOffered(s)) continue;
     const c = all.get(s.id), m = months[Number(s.date.slice(5, 7)) - 1];
     total.holidayBase += c.holidayBase || 0;
     const e = byEmp[s.employerId] ||= { hours: 0, pay: 0, net: 0, count: 0 };
@@ -527,10 +535,25 @@ const csvCell = v => {
 };
 const nok = n => n.toFixed(2).replace('.', ',');
 
-export function toCSV(shifts, employers, ym) {
+// Velg vakter til eksport: periode ('month' + ym, 'future', 'all' eller 'range' + from/to) og arbeidsgiver ('all' eller id).
+// Tilbudte vakter er aldri med.
+export function selectForExport(shifts, { period = 'all', ym, from, to, employerId = 'all', today = isoDate(new Date()) } = {}) {
+  return shifts.filter(s => counted(s)
+    && (employerId === 'all' || s.employerId === employerId)
+    && (period === 'all'
+      || (period === 'month' && s.date.startsWith(ym))
+      || (period === 'future' && s.date >= today)
+      || (period === 'range' && (!from || s.date >= from) && (!to || s.date <= to))))
+    .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
+}
+
+// Regneark for en måned (ym) eller en ferdig utvalgt liste med vakter. Lønn regnes med alle vaktene,
+// så ukeovertid blir riktig selv om bare noen av dem eksporteres.
+export function toCSV(shifts, employers, ymOrList) {
   const rows = [['Dato', 'Arbeidsgiver', 'Start', 'Slutt', 'Pause (min)', 'Timer', 'Tillegg (kr)', 'Overtid (t)', 'Estimert lønn (kr)', 'Notat']];
   const all = calcAll(shifts, employers);
-  for (const s of shiftsInMonth(shifts, ym)) {
+  const list = Array.isArray(ymOrList) ? ymOrList : shiftsInMonth(shifts, ymOrList);
+  for (const s of list) {
     const emp = employers.find(e => e.id === s.employerId);
     const c = all.get(s.id);
     rows.push([s.date, emp ? emp.name : '', s.start, s.end, s.breakMin || 0, nok(c.hours),
@@ -734,6 +757,73 @@ export function normTime(v) {
 }
 
 // Gjetter hvilke kolonner som er hva ut fra overskriftene.
+// ---------- Finn vakter i innlimt tekst (SMS, e-post, vaktliste) ----------
+// Kjører lokalt i appen: ingenting sendes noe sted. Forstår vanlige norske formater, for eksempel
+// «12/11 22–07.30», «tirsdag 14.00–22.00», «12. nov kl 15-23», «2026-11-12 0800-1600» og «i morgen 16-22».
+const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, mai: 5, jun: 6, jul: 7, aug: 8, sep: 9, okt: 10, nov: 11, des: 12 };
+const WEEKDAYS = { søn: 0, man: 1, tir: 2, ons: 3, tor: 4, fre: 5, lør: 6 };
+const TIME_RANGE = /(?:\bkl\.?\s*)?\b(\d{1,2})(?:[:.](\d{2}))?\s*(?:-|–|—|til)\s*(?:kl\.?\s*)?(\d{1,2})(?:[:.](\d{2}))?\b|\b(\d{2})(\d{2})\s*(?:-|–|—)\s*(\d{2})(\d{2})\b/gi;
+
+function okTime(h, m) { return h >= 0 && h <= 24 && m >= 0 && m < 60 && m % 5 === 0 && !(h === 24 && m > 0); }
+const hhmm = (h, m) => `${pad(h === 24 ? 0 : h)}:${pad(m)}`;
+
+export function parseShiftText(text, { today = new Date(), employers = [] } = {}) {
+  const t0 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const names = employers.filter(Boolean).map(n => ({ n, re: new RegExp(`(^|[^\\p{L}])${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^\\p{L}])`, 'iu') }));
+  const findEmp = line => names.find(x => x.re.test(line))?.n || null;
+  const wholeEmp = (() => { const hits = names.filter(x => x.re.test(text)); return hits.length === 1 ? hits[0].n : null; })();
+  // Uten årstall: datoen i år, eller neste år hvis den er mer enn to måneder tilbake i tid.
+  const withYear = (d, m, y) => {
+    if (y) return new Date(y < 100 ? 2000 + y : y, m - 1, d);
+    let dt = new Date(t0.getFullYear(), m - 1, d);
+    if (dt < addDaysLocal(t0, -60)) dt = new Date(t0.getFullYear() + 1, m - 1, d);
+    return dt;
+  };
+  const shifts = [];
+  let lastDate = null;
+  for (const raw of String(text).split(/\r?\n/)) {
+    let line = raw.trim();
+    if (!line) continue;
+    const lower = line.toLowerCase();
+    // Datoer på formen 2026-11-12 tas ut først, ellers ser «11-12» ut som et tidsrom.
+    let iso = null;
+    line = line.replace(/\b(20\d{2})-(\d{1,2})-(\d{1,2})\b/, (all, y, mo, d) => { iso = new Date(+y, +mo - 1, +d); return ' '; });
+    // Så klokkeslett, så tall som 14.00 ikke tolkes som dato.
+    const times = [];
+    line = line.replace(TIME_RANGE, (all, h1, m1, h2, m2, a1, b1, a2, b2) => {
+      const [sh, sm, eh, em] = h1 != null ? [+h1, +(m1 || 0), +h2, +(m2 || 0)] : [+a1, +b1, +a2, +b2];
+      if (!okTime(sh, sm) || !okTime(eh, em) || (sh === eh && sm === em)) return all;
+      times.push([hhmm(sh, sm), hhmm(eh, em)]);
+      return ' ';
+    });
+    // Dato
+    let date = null;
+    let m;
+    if (iso) date = iso;
+    else if ((m = line.match(/\b(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?\b/)) && +m[2] >= 1 && +m[2] <= 12 && +m[1] >= 1 && +m[1] <= 31) date = withYear(+m[1], +m[2], m[3] ? +m[3] : null);
+    else if ((m = lower.match(/\b(\d{1,2})\.?\s*(jan|feb|mar|apr|mai|jun|jul|aug|sep|okt|nov|des)[a-zæøå]*\.?(?:\s+(20\d{2}))?/))) date = withYear(+m[1], MONTHS[m[2]], m[3] ? +m[3] : null);
+    else if (/\bi\s*morgen\b/.test(lower)) date = addDaysLocal(t0, 1);
+    else if (/\bi\s*dag\b/.test(lower)) date = t0;
+    else if ((m = lower.match(/\b(man|tir|ons|tor|fre|lør|søn)(?:dag|sdag)?\b/))) { const want = WEEKDAYS[m[1]]; date = addDaysLocal(t0, (want - t0.getDay() + 7) % 7); }
+    if (date && !isNaN(date)) lastDate = date;
+    if (!times.length) continue;
+    const use = date || lastDate; // klokkeslett på linja under en dato
+    if (!use) continue;
+    const employer = findEmp(raw) || wholeEmp;
+    for (const [start, end] of times) shifts.push({ date: isoDate(use), start, end, employer, note: '' });
+  }
+  const seen = new Set();
+  const uniq = shifts.filter(x => { const k = `${x.date}|${x.start}|${x.end}|${x.employer}`; if (seen.has(k)) return false; seen.add(k); return true; });
+  return { shifts: uniq, comment: uniq.length ? '' : 'Fant ingen vakter. Teksten må ha en dato (for eksempel 12/11, 12. nov eller tirsdag) og et tidsrom (for eksempel 22–07.30).' };
+}
+function addDaysLocal(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+
+// Gjør funnene om til rader i samme format som et regneark, så de går gjennom samme kontroll og forhåndsvisning.
+export const TEXT_HEADER = ['Dato', 'Start', 'Slutt', 'Pause', 'Arbeidsgiver', 'Notat'];
+export function textToRows(res) {
+  return [TEXT_HEADER, ...(res?.shifts || []).map(x => [x.date, x.start, x.end, '', x.employer || '', x.note || ''])];
+}
+
 export function guessColumns(header) {
   const find = re => header.findIndex(h => re.test(h.toLowerCase()));
   return {

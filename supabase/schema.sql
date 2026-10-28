@@ -132,3 +132,35 @@ create policy "egen profil" on public.profiles for all to authenticated
   using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
 grant select, insert, update, delete on public.profiles to authenticated;
 revoke all on public.profiles from anon;
+
+-- ---------- Status på vakter ----------
+-- 'offered' = tilbudt, ikke tatt ennå. Tom = bekreftet.
+alter table public.shifts add column if not exists status text check (status is null or status in ('offered', 'confirmed'));
+
+-- ---------- Kalenderabonnement ----------
+-- Hemmelig nøkkel per bruker. Kalenderapper henter vaktene fra functions/v1/calendar?t=<token>.
+create table if not exists public.calendar_feeds (
+  user_id    uuid primary key default auth.uid() references auth.users (id) on delete cascade,
+  token      text not null unique check (char_length(token) >= 32),
+  created_at timestamptz not null default now()
+);
+alter table public.calendar_feeds enable row level security;
+drop policy if exists "egen kalenderlenke" on public.calendar_feeds;
+create policy "egen kalenderlenke" on public.calendar_feeds for all to authenticated
+  using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+grant select, insert, update, delete on public.calendar_feeds to authenticated;
+revoke all on public.calendar_feeds from anon;
+
+-- ---------- Tilbakemeldinger ----------
+-- Skrives bare av serverfunksjonen (feedback). Les dem i Table Editor.
+create table if not exists public.feedback (
+  id         bigint generated always as identity primary key,
+  created_at timestamptz not null default now(),
+  user_id    uuid references auth.users (id) on delete set null,
+  email      text check (email is null or char_length(email) <= 200),
+  kind       text not null check (kind in ('feil', 'forslag', 'annet')),
+  message    text not null check (char_length(message) between 3 and 4000),
+  meta       jsonb
+);
+alter table public.feedback enable row level security;
+revoke all on public.feedback from anon, authenticated;
