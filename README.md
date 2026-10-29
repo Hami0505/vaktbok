@@ -133,7 +133,9 @@ Uten `feedback` åpner skjemaet e-postprogrammet i stedet.
 1. **Google Cloud Console** → APIs & Services → Credentials → *Create credentials* → *OAuth client ID* → *Web application*. Legg til `https://kvaxzvtlhbdpeicpcmbn.supabase.co/auth/v1/callback` under *Authorized redirect URIs*. Sett opp *OAuth consent screen* med appnavn, e-post og lenke til personvernerklæringen.
 2. **Supabase** → Authentication → Providers → Google: lim inn Client ID og Client secret, og slå på.
 3. **Supabase** → Authentication → URL Configuration: sjekk at `https://hami0505.github.io/vaktbok/` står under *Redirect URLs*.
-4. **`js/config.js`** på GitHub: endre `providers: []` til `providers: ['google']`.
+4. **`js/config.js`**: sett `providers: ['google']` og `googleClientId: '<Client ID>'`. Med `googleClientId` brukes Googles egen knapp (Google Identity Services), og Google-vinduet viser appens adresse i stedet for Supabase sin. Uten den brukes vanlig omdirigering via Supabase.
+5. **Google Cloud** → Clients → klienten: `https://hami0505.github.io` under *Authorized JavaScript origins*. For lokal testing også `http://localhost` og `http://localhost:5173`.
+6. **Google Cloud** → Branding: hjemmeside, personvernlenke og autoriserte domener (`hami0505.github.io`, `kvaxzvtlhbdpeicpcmbn.supabase.co`). Deretter Audience → *Publish app*.
 
 ## Sikkerhetskopi
 

@@ -5,6 +5,49 @@ import { $, D, confirmBox, contact, download, esc, friendlyError, store, toast, 
 import { setTab } from '../app.js';
 
 // ---------- Konto ----------
+// ---------- Google-knappen ----------
+// Bruker Googles egen knapp når googleClientId er satt. Da står appens adresse i Google-vinduet, ikke Supabase sin.
+// Lastes bare når innloggingen vises. Feiler den (offline, blokkert), står vår egen knapp igjen og bruker vanlig omdirigering.
+const GSI_SRC = 'https://accounts.google.com/gsi/client';
+let gsi = null;
+function loadGsi() {
+  if (!gsi) gsi = new Promise((resolve, reject) => {
+    const el = document.createElement('script');
+    el.src = GSI_SRC; el.async = true;
+    el.onload = () => window.google?.accounts?.id ? resolve(window.google.accounts.id) : reject(new Error('gsi'));
+    el.onerror = () => { gsi = null; reject(new Error('gsi')); };
+    document.head.append(el);
+  }).then(async id => {
+    const raw = [...crypto.getRandomValues(new Uint8Array(32))].map(b => b.toString(16).padStart(2, '0')).join('');
+    const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw)))].map(b => b.toString(16).padStart(2, '0')).join('');
+    id.initialize({
+      client_id: config.googleClientId,
+      nonce: hash,
+      auto_select: false,
+      itp_support: true,
+      callback: ({ credential }) => store.signInWithIdToken(credential, raw).catch(e => toast(friendlyError(e))),
+    });
+    return id;
+  });
+  return gsi;
+}
+
+async function renderGoogleButton() {
+  const box = $('googleBox');
+  if (!box || !config.googleClientId || !navigator.onLine) return;
+  let id;
+  try { id = await loadGsi(); } catch { return; }
+  if (!box.isConnected) return;
+  const slot = document.createElement('div');
+  slot.className = 'gsi-slot';
+  const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+  id.renderButton(slot, {
+    type: 'standard', theme: dark ? 'filled_black' : 'outline', size: 'large', text: 'continue_with',
+    shape: 'rectangular', logo_alignment: 'center', locale: 'no', width: Math.min(360, Math.max(200, box.clientWidth || 360)),
+  });
+  box.replaceChildren(slot);
+}
+
 // ---------- Kalenderabonnement ----------
 let feedCache = { user: null, token: undefined };
 async function renderFeed() {
@@ -75,12 +118,13 @@ export function renderAccount() {
       : `
       <h2>Logg inn eller opprett konto</h2>
       <p class="muted">Med konto lagres vaktene trygt og synkes mellom mobil og PC. Du får en engangskode på e-post, så du trenger ikke passord. Uten konto lagres alt bare på denne enheten.</p>
-      ${(config.providers || []).includes('google') ? `<button class="btn google-btn" type="button" data-action="login-google"><span aria-hidden="true">G</span> Fortsett med Google</button>
+      ${(config.providers || []).includes('google') ? `<div id="googleBox" class="google-box"><button class="btn google-btn" type="button" data-action="login-google"><span aria-hidden="true">G</span> Fortsett med Google</button></div>
       <p class="or small muted">eller få en kode på e-post</p>` : ''}
       <form id="loginForm" class="form-row">
         <label>E-post<input type="email" id="emailInput" autocomplete="email" required></label>
         <button class="btn primary" type="submit">Send kode</button>
       </form>`;
+    if (!ui.codeSentTo) renderGoogleButton();
   } else {
     const n = store.pending;
     p.innerHTML = `<h2>Konto</h2>

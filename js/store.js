@@ -404,6 +404,14 @@ export class Store extends EventTarget {
     if (error) throw new Error(error.message);
   }
 
+  // Innlogging med Googles egen knapp (Google Identity Services). Google viser appens adresse i stedet for Supabase sin.
+  // rawNonce er den uhashede verdien; Google fikk SHA-256 av den.
+  async signInWithIdToken(token, rawNonce) {
+    if (!this.sb) throw new Error('no-server');
+    const { error } = await this.sb.auth.signInWithIdToken({ provider: 'google', token, nonce: rawNonce });
+    if (error) throw new Error(error.message);
+  }
+
   async sendCode(email) {
     const redirect = location.origin + location.pathname;
     const { error } = await this.sb.auth.signInWithOtp({ email, options: { emailRedirectTo: redirect, shouldCreateUser: true } });

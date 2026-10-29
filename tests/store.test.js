@@ -165,3 +165,15 @@ test('profil: henter, markerer sist aktiv én gang per dag og lagrer navn', asyn
   s5.sb = { from: () => ({ select: () => ({ maybeSingle: async () => ({ data: null, error: { code: 'PGRST205', message: "Could not find the table 'public.profiles'" } }) }) }) };
   assert.equal(await s5.loadProfile(), null); assert.ok(s5.noProfiles, 'manglende tabell oppdages');
 });
+
+test('Google-knappen: sender token og uhashet nonce til Supabase', async () => {
+  const s6 = new Store({ supabaseUrl: 'x', supabaseAnonKey: 'y' });
+  let got = null;
+  s6.sb = { auth: { signInWithIdToken: async a => { got = a; return { error: null }; } } };
+  await s6.signInWithIdToken('tok', 'raw');
+  assert.deepEqual(got, { provider: 'google', token: 'tok', nonce: 'raw' });
+  s6.sb = { auth: { signInWithIdToken: async () => ({ error: { message: 'Passed nonce and nonce in id_token should either both exist or not.' } }) } };
+  await assert.rejects(() => s6.signInWithIdToken('tok', 'raw'), /nonce/);
+  const s7 = new Store({}); s7.sb = null;
+  await assert.rejects(() => s7.signInWithIdToken('tok', 'raw'), /no-server/);
+});

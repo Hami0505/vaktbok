@@ -541,6 +541,8 @@ textarea { font: inherit; color: var(--ink); background: var(--paper); border: 1
 .feed-link input { flex: 1 1 260px; font-size: .85rem !important; font-family: ui-monospace, monospace; }
 #feedbackDialog label, #impAi label { margin-top: 10px; }
 .btn.small-btn { padding: 5px 12px; font-size: .88rem; min-height: 0; }
+.google-box { width: 100%; max-width: 360px; min-height: 44px; }
+.gsi-slot { display: flex; justify-content: center; min-height: 44px; color-scheme: normal; }
 .google-btn { width: 100%; max-width: 360px; justify-content: center; gap: 10px; font-weight: 700; }
 .google-btn span { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--ink); color: var(--card); font-size: .8rem; }
 .or { margin: 10px 0 6px; }

@@ -1,6 +1,6 @@
 # Vaktbok – prosjektoversikt
 
-Grunnmuren for videre arbeid. Oppdatert 28. oktober 2026. Når noe her endres, oppdater dette dokumentet.
+Grunnmuren for videre arbeid. Oppdatert 29. oktober 2026. Når noe her endres, oppdater dette dokumentet.
 
 ## 1. Hva Vaktbok er
 
@@ -24,7 +24,7 @@ Startet som Mandatory Assignment 3 (Vibe Coding) ved OsloMet, og videreutviklet 
 | Kode | https://github.com/Hami0505/vaktbok (gamle `Vaktbok-prototype` sender videre) |
 | Innlevert versjon | taggen `innlevering-ma3` |
 | Supabase | prosjekt `kvaxzvtlhbdpeicpcmbn`, region EU West (Irland), gratisplan |
-| E-post | `vaktbok.app@gmail.com` (kontakt, avsender for koder og tilbakemeldinger) |
+| E-post | `vaktbok.app@gmail.com` (kontakt, avsender for koder og tilbakemeldinger, eier Google Cloud-prosjektet `vaktbok`) |
 | SMTP / e-post-API | Brevo, gratisplan |
 | Administrator | `haaz2305@gmail.com` (i tabellen `admins`) |
 | Ansvarlig i personvernerklæringen | Hamza Aziz |
@@ -46,7 +46,7 @@ Nettleser (PWA, lokal-først)
 GitHub Pages ──── serverer appen (gratis, HTTPS)
 
 Supabase (EU)
-├── Auth                              e-postkode (OTP), Google valgfritt
+├── Auth                              e-postkode (OTP) og Google
 ├── Postgres + RLS                    hver bruker ser bare sine egne rader
 ├── Realtime                          synk mellom enheter + «inne nå»
 └── Edge Functions                    calendar, feedback, ics-proxy
@@ -74,7 +74,7 @@ vaktbok/
 ├── icons/                      icon.svg, icon-192.png, icon-512.png
 ├── js/
 │   ├── app.js                  oppstart, setTab, render, actions, landingsside, bannere
-│   ├── config.js               Supabase-nøkler, contactEmail, providers (OVERSKRIVES IKKE)
+│   ├── config.js               Supabase-nøkler, contactEmail, providers, googleClientId (OVERSKRIVES IKKE)
 │   ├── logic.js                beregning: lønn, tillegg, overtid, skatt, frikort, varsler,
 │   │                           serier, import/eksport-formater, tekstgjenkjenning
 │   ├── store.js                Store-klassen: lagring, synk, auth, profil, sanntid, serverkall
@@ -106,7 +106,7 @@ vaktbok/
 ├── scripts/
 │   ├── vaktbok-oppdater.zsh    funksjonen som legges i ~/.zshrc
 │   └── vaktbok-backup.sh       sikkerhetskopi av databasen til Macen
-├── tests/                      logic, store, sync, functions (72 tester, node --test)
+├── tests/                      logic, store, sync, functions (73 tester, node --test)
 ├── .github/workflows/          test.yml, keepalive.yml
 └── README.md                   for brukere og utviklere
 ```
@@ -190,7 +190,7 @@ logic.js (ren, ingen DOM)
 store.js (Store extends EventTarget, events: change, status, profile, presence)
   Data:       upsertEmployer deleteEmployer upsertShift deleteShift updateSettings addAll exportAll
   Synk:       init sync flush pull subscribe useScope
-  Konto:      sendCode verifyCode signInWithProvider signOut deleteEverything deleteAccount
+  Konto:      sendCode verifyCode signInWithIdToken signInWithProvider signOut deleteEverything deleteAccount
   Profil:     loadProfile setDisplayName
   Server:     fetchCalendar (ics-proxy) getFeed newFeed deleteFeed feedUrl (calendar)
               sendFeedback (feedback) isAdmin adminStats
@@ -214,7 +214,7 @@ Funksjonene bruker `serviceHeaders()`, som støtter både nye (`SUPABASE_SECRET_
 ```bash
 # Kjøre lokalt
 npm start                 # http://localhost:5173
-npm test                  # 72 tester
+npm test                  # 73 tester
 
 # Oppdatere fra Claude: last ned vaktbok.zip, så
 vaktbok-oppdater "Beskrivelse"
@@ -237,7 +237,7 @@ vaktbok-backup            # til ~/Documents/Vaktbok-backup, beholder 12
 
 - **Ingen AI i appen:** «Lim inn tekst» kjører lokalt med `parseShiftText`. Gratis, privat og virker uten nett.
 - **Ingen betalte tjenester:** ikke Supabase Pro, ikke eget domene, ikke SMS-innlogging.
-- **Innlogging:** e-postkode uten passord. Google klart i koden (`providers: ['google']` i config.js), ikke slått på ennå.
+- **Innlogging:** e-postkode uten passord, og Google. Med `googleClientId` i config.js brukes Googles egen knapp (Google Identity Services + `signInWithIdToken`), så Google-vinduet viser `hami0505.github.io` i stedet for Supabase-adressen. Skriptet lastes bare når innloggingen vises. Feiler det, brukes vanlig omdirigering via Supabase. Ingen logo i Google Branding, siden det krever verifisering.
 - **Statistikk:** egen side for administrator. «Inne nå» teller enheter og hvor mange som er innlogget, aldri hvem. Sist aktiv lagres som dato, ikke klokkeslett.
 - **Feillogg i egen tabell** i stedet for Sentry (gratis, blir i EU).
 - **Tilbudte vakter** telles ikke i lønn, frikort, eksport eller varsler.
@@ -247,10 +247,10 @@ vaktbok-backup            # til ~/Documents/Vaktbok-backup, beholder 12
 
 ## 11. Gjenstår
 
-1. **Slå på Google-innlogging** (Google Cloud → OAuth client, Supabase → Providers → Google, `providers: ['google']` i config.js). Fjerner risikoen for at koder havner i søppelpost.
-2. **Beta med 3–5 kolleger**, og rette det de finner.
-3. **Sette opp sikkerhetskopi** og ta den første (`vaktbok-backup oppsett`).
-4. **Skrive CSS-en om** fra lag til én samlet beskrivelse, kontrollert mot skjermbilder.
-5. **Systematisk testing i Safari og på iPhone.**
+1. **Beta med 3–5 kolleger**, og rette det de finner.
+2. **Skrive CSS-en om** fra lag til én samlet beskrivelse, kontrollert mot skjermbilder.
+3. **Systematisk testing i Safari og på iPhone**, også Google-knappen.
 
-**Vedlikehold:** Brevo-nøkkelen utløper etter 90 dager uten bruk. Feilloggen ryddes hvert halvår (spørring nederst i `statistikk.sql`). Sjekk at keepalive kjører grønt under Actions.
+Ferdig 29. oktober: sikkerhetskopi satt opp (`vaktbok-backup`, alias i `~/.zshrc`, adressen i nøkkelringen) og Google-innlogging publisert.
+
+**Vedlikehold:** Ta sikkerhetskopi med `vaktbok-backup` første dag hver måned. Brevo-nøkkelen utløper etter 90 dager uten bruk. Feilloggen ryddes hvert halvår (spørring nederst i `statistikk.sql`). Sjekk at keepalive kjører grønt under Actions.
