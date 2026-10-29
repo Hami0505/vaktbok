@@ -6,4 +6,5 @@ export const config = {
   supabaseAnonKey: 'sb_publishable_-bZhQBX3CQNzXjHUBbl-DQ_LHPX6IQD',
   contactEmail: 'vaktbok.app@gmail.com', // vises i personvernerklæringen og ved feil
   providers: ['google'],
+  googleClientId: '202201258218-h2ccvd6sc4s4otiklhgr0tjd8c31h7m7.apps.googleusercontent.com',
 };
