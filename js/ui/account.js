@@ -40,9 +40,9 @@ async function renderGoogleButton() {
   if (!box.isConnected) return;
   const slot = document.createElement('div');
   slot.className = 'gsi-slot';
-  const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+  // Hvit knapp i både lys og mørk modus: Googles mørke variant har logoen på en hvit flate som ikke kan endres.
   id.renderButton(slot, {
-    type: 'standard', theme: dark ? 'filled_black' : 'outline', size: 'large', text: 'continue_with',
+    type: 'standard', theme: 'outline', size: 'large', text: 'continue_with',
     shape: 'rectangular', logo_alignment: 'center', locale: 'no', width: Math.min(360, Math.max(200, box.clientWidth || 360)),
   });
   box.replaceChildren(slot);

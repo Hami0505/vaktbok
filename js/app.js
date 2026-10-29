@@ -224,6 +224,15 @@ if (initialHash === '#om') showLanding(true);
 // så siden ikke først tegner en tom uke og så hopper.
 else if (!initialHash && !localStorage.getItem(WELCOME_KEY) && !Object.keys(localStorage).some(k => k.startsWith('sb-') || k.startsWith('vaktbok:data:'))) showLanding(true);
 
+// Kommer brukeren tilbake fra en avbrutt eller utløpt innlogging, står feilen i adressen. Fjern den og si fra.
+const authErr = (() => {
+  const q = new URLSearchParams(location.search), h = new URLSearchParams(location.hash.slice(1));
+  const code = q.get('error_code') || q.get('error') || h.get('error_code') || h.get('error');
+  if (!code) return null;
+  history.replaceState(null, '', location.pathname);
+  return code;
+})();
+
 store.init().then(() => {
   if (store.user && ui.landing && initialHash !== '#om') showLanding(false);
   if (store.user) {
@@ -231,8 +240,13 @@ store.init().then(() => {
     store.addEventListener('status', once); once();
   } else extendSeries();
   // Nye besøkende uten konto og uten data ser landingssiden først.
-  if (!ui.landing && !store.user && !D().employers.length && !localStorage.getItem(WELCOME_KEY) && !initialHash) showLanding(true);
+  if (!ui.landing && !store.user && !D().employers.length && !localStorage.getItem(WELCOME_KEY) && !initialHash && !authErr) showLanding(true);
   render();
+  if (authErr && !store.user) {
+    if (ui.landing) showLanding(false);
+    setTab('konto');
+    toast(authErr === 'access_denied' ? 'Innloggingen ble avbrutt.' : 'Innloggingen gikk ut på tid. Prøv igjen.');
+  }
 });
 
 registerSW();
