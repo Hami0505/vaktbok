@@ -39,5 +39,34 @@ order by antall desc;
 -- 5. Siste tilbakemeldinger
 select created_at, kind, message, email from public.feedback order by created_at desc limit 50;
 
--- 6. Rydd: slett feillogg eldre enn seks måneder
+-- 6. Aktive innlogginger: IP-adresse og nettleser per økt
+-- Supabase lagrer dette selv så lenge brukeren er innlogget. Økten forsvinner ved utlogging eller når den utløper.
+-- Bruk det til å oppdage mistenkelige innlogginger, ikke til å følge med på enkeltpersoner.
+select
+  u.email,
+  u.raw_app_meta_data->>'provider'                      as innlogging,
+  s.created_at::timestamp(0)                            as logget_inn,
+  coalesce(s.refreshed_at, s.updated_at)::timestamp(0)  as sist_brukt,
+  host(s.ip)                                            as ip,
+  case
+    when s.user_agent ~* 'edg/'                   then 'Edge'
+    when s.user_agent ~* 'crios|chrome'           then 'Chrome'
+    when s.user_agent ~* 'fxios|firefox'          then 'Firefox'
+    when s.user_agent ~* 'safari'                 then 'Safari'
+    else 'Annen'
+  end                                                   as nettleser,
+  case
+    when s.user_agent ~* 'iphone|ipad'            then 'iPhone/iPad'
+    when s.user_agent ~* 'android'                then 'Android'
+    when s.user_agent ~* 'mac os'                 then 'Mac'
+    when s.user_agent ~* 'windows'                then 'Windows'
+    when s.user_agent ~* 'linux'                  then 'Linux'
+    else 'Ukjent'
+  end                                                   as system,
+  s.user_agent                                          as full_tekst
+from auth.sessions s
+join auth.users u on u.id = s.user_id
+order by sist_brukt desc nulls last;
+
+-- 7. Rydd: slett feillogg eldre enn seks måneder
 -- delete from public.client_errors where created_at < now() - interval '6 months';
