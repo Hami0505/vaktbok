@@ -106,7 +106,9 @@ vaktbok/
 ├── scripts/
 │   ├── vaktbok-oppdater.zsh    funksjonen som legges i ~/.zshrc
 │   └── vaktbok-backup.sh       sikkerhetskopi av databasen til Macen
-├── tests/                      logic, store, sync, functions (73 tester, node --test)
+├── tests/                      logic, store, sync, functions (83 tester, node --test)
+│   └── e2e/app.spec.js         grensesnittet med Playwright og axe (npm run e2e)
+├── playwright.config.js        390, 320 og 1280 piksler, lys og mørk modus
 ├── .github/workflows/          test.yml, keepalive.yml
 └── README.md                   for brukere og utviklere
 ```
@@ -214,7 +216,8 @@ Funksjonene bruker `serviceHeaders()`, som støtter både nye (`SUPABASE_SECRET_
 ```bash
 # Kjøre lokalt
 npm start                 # http://localhost:5173
-npm test                  # 73 tester
+npm test                  # 83 tester
+npm run e2e               # Playwright (første gang: npm install && npx playwright install chromium)
 
 # Oppdatere fra Claude: last ned vaktbok.zip, så
 vaktbok-oppdater "Beskrivelse"
@@ -229,7 +232,7 @@ vaktbok-backup            # til ~/Documents/Vaktbok-backup, beholder 12
 
 **Ved hver utgivelse:** øk `VERSION` i `sw.js` og `<meta name="vaktbok-version">` i `index.html`.
 
-**Testing:** `npm test` for logikk, datalag, synk og serverfunksjoner. Grensesnittet testes med Playwright i Chromium (390, 320 og 1280 piksler, lys og mørk modus), axe for tilgjengelighet, og Lighthouse. Safari og iPhone testes for hånd.
+**Testing:** `npm test` for logikk, datalag, synk og serverfunksjoner. `npm run e2e` tester grensesnittet med Playwright i Chromium (390, 320 og 1280 piksler, lys og mørk modus) og axe for tilgjengelighet. Begge kjører i GitHub Actions ved hver push. Lighthouse kjøres for hånd. Safari og iPhone testes for hånd.
 
 **Hemmeligheter** (API-nøkler, passord, kalenderlenker) skal aldri i chat, skjermbilder eller kode. Ligger noe ute, lag nytt.
 
@@ -241,6 +244,7 @@ vaktbok-backup            # til ~/Documents/Vaktbok-backup, beholder 12
 - **Statistikk:** egen side for administrator. «Inne nå» teller enheter og hvor mange som er innlogget, aldri hvem. Sist aktiv lagres som dato, ikke klokkeslett.
 - **Feillogg i egen tabell** i stedet for Sentry (gratis, blir i EU).
 - **Tilbudte vakter** telles ikke i lønn, frikort, eksport eller varsler.
+- **Samtidige endringer på to enheter:** hver rad husker serverversjonen (`updated_at`) den bygger på, og endringer sendes betinget. Har en annen enhet endret raden, slås endringene sammen felt for felt. Endret begge samme felt, vinner den som kom først til serveren, og brukeren får beskjed. Slettet på en annen enhet vinner over en endring. Innstillinger slås sammen per del (for eksempel per lønnsslipp). Ingen databaseendring trengs.
 - **Arbeidsmiljøloven gjelder per arbeidsgiver:** varsler på tvers av arbeidsgivere sier at de er for brukerens egen del.
 - **Eksport** til .ics og .csv med periode og arbeidsgiver. Timeliste som PDF (delingsark på mobil, ny fane på PC).
 - **Repoet heter `vaktbok`.** Den gamle adressen sender videre via repoet `Vaktbok-prototype`.

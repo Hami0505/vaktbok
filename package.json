@@ -6,10 +6,15 @@
   "type": "module",
   "scripts": {
     "test": "node --experimental-strip-types --no-warnings --test \"tests/*.test.js\"",
-    "start": "npx --yes serve@14.2.4 -l 5173 ."
+    "start": "npx --yes serve@14.2.4 -l 5173 .",
+    "e2e": "playwright test"
   },
   "engines": {
     "node": ">=22.6"
   },
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "@axe-core/playwright": "4.10.2"
+  }
 }

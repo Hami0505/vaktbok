@@ -2,7 +2,7 @@
 // Lokalt først: alle endringer lagres umiddelbart i nettleseren og legges i en utboks.
 // Når brukeren er logget inn og på nett, sendes utboksen til Supabase, og serverdata hentes inn.
 import { DEFAULT_SETTINGS } from './logic.js';
-import { mergeRemote, coalesce, orderOps } from './sync-core.js';
+import { mergeRemote, coalesce, orderOps, threeWay, settingsPaths, applyPaths, rebase } from './sync-core.js';
 
 const SUPABASE_JS = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
 const K = {
@@ -17,6 +17,7 @@ export const newId = () => (crypto.randomUUID ? crypto.randomUUID()
 
 const read = (key, fallback) => { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; } };
 const write = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { console.warn('Kunne ikke lagre lokalt', e); } };
+const stripV = ({ _v, ...rest }) => rest;
 const emptyData = () => ({ employers: [], shifts: [], settings: { ...DEFAULT_SETTINGS } });
 
 // Radkonvertering app <-> database
@@ -25,8 +26,8 @@ const toRow = {
   shifts: (s, uid) => ({ id: s.id, user_id: uid, employer_id: s.employerId, date: s.date, start_time: s.start, end_time: s.end, break_min: s.breakMin || 0, note: s.note || '', series_id: s.seriesId || null, fee: s.fee === '' || s.fee == null ? null : Number(s.fee), status: s.status === 'offered' ? 'offered' : null }),
 };
 const fromRow = {
-  employers: r => ({ id: r.id, name: r.name, color: r.color, rate: Number(r.rate), rules: r.rules || [], overtime: r.overtime, archived: r.archived, pay: r.pay || null }),
-  shifts: r => ({ id: r.id, employerId: r.employer_id, date: r.date, start: r.start_time.slice(0, 5), end: r.end_time.slice(0, 5), breakMin: r.break_min, note: r.note || '', seriesId: r.series_id || null, fee: r.fee == null ? null : Number(r.fee), status: r.status || null }),
+  employers: r => ({ id: r.id, _v: r.updated_at, name: r.name, color: r.color, rate: Number(r.rate), rules: r.rules || [], overtime: r.overtime, archived: r.archived, pay: r.pay || null }),
+  shifts: r => ({ id: r.id, _v: r.updated_at, employerId: r.employer_id, date: r.date, start: r.start_time.slice(0, 5), end: r.end_time.slice(0, 5), breakMin: r.break_min, note: r.note || '', seriesId: r.series_id || null, fee: r.fee == null ? null : Number(r.fee), status: r.status || null }),
 };
 
 export class Store extends EventTarget {
@@ -138,11 +139,23 @@ export class Store extends EventTarget {
 
   // ---------- Endringer ----------
 
+  // Lagrer en rad lokalt og legger den i utboksen sammen med serverversjonen (_v) den bygger på,
+  // så synken kan oppdage om en annen enhet har endret samme rad i mellomtiden.
+  put(table, input) {
+    const list = this.data[table];
+    const i = list.findIndex(x => x.id === input.id);
+    const old = i >= 0 ? list[i] : null;
+    const item = { ...input, _v: old?._v };
+    if (!item._v) delete item._v;
+    if (i >= 0) list[i] = item; else list.push(item);
+    const op = { table, op: 'upsert', id: item.id, row: item };
+    if (old?._v) { op.base = old._v; op.prev = old; }
+    this.queue(op);
+    return item;
+  }
+
   upsertEmployer(e) {
-    const item = { ...e, id: e.id || newId() };
-    const i = this.data.employers.findIndex(x => x.id === item.id);
-    if (i >= 0) this.data.employers[i] = item; else this.data.employers.push(item);
-    this.queue({ table: 'employers', op: 'upsert', id: item.id, row: item });
+    const item = this.put('employers', { ...e, id: e.id || newId() });
     this.persist(); this.sync();
     return item;
   }
@@ -158,10 +171,7 @@ export class Store extends EventTarget {
   }
 
   upsertShift(s) {
-    const item = { ...s, id: s.id || newId() };
-    const i = this.data.shifts.findIndex(x => x.id === item.id);
-    if (i >= 0) this.data.shifts[i] = item; else this.data.shifts.push(item);
-    this.queue({ table: 'shifts', op: 'upsert', id: item.id, row: item });
+    const item = this.put('shifts', { ...s, id: s.id || newId() });
     this.persist(); this.sync();
     return item;
   }
@@ -173,16 +183,17 @@ export class Store extends EventTarget {
   }
 
   updateSettings(patch) {
+    const before = this.data.settings;
     this.data.settings = { ...this.data.settings, ...patch };
-    this.queue({ table: 'settings', op: 'upsert', id: 'settings', row: this.data.settings });
+    // Bare delene som faktisk endret seg, sendes som endring. Resten tas fra serveren ved synk.
+    this.queue({ table: 'settings', op: 'upsert', id: 'settings', row: this.data.settings, paths: settingsPaths(before, this.data.settings) });
     this.persist(); this.sync();
   }
 
   // Legger til data (import, gjestedata eller prototype) uten å overskrive eksisterende. Lagres samlet.
   addAll({ employers = [], shifts = [] }) {
-    const put = (list, item) => { const i = list.findIndex(x => x.id === item.id); if (i >= 0) list[i] = item; else list.push(item); };
-    for (const e of employers) { put(this.data.employers, e); this.queue({ table: 'employers', op: 'upsert', id: e.id, row: e }); }
-    for (const s of shifts) { put(this.data.shifts, s); this.queue({ table: 'shifts', op: 'upsert', id: s.id, row: s }); }
+    for (const e of employers) this.put('employers', e);
+    for (const s of shifts) this.put('shifts', s);
     this.persist(); this.sync();
   }
 
@@ -192,7 +203,7 @@ export class Store extends EventTarget {
     return {
       app: 'Vaktbok', format: 2, exportedAt: new Date().toISOString(),
       account: this.user ? this.user.email : null,
-      employers: this.data.employers, shifts: this.data.shifts, settings: this.data.settings,
+      employers: this.data.employers.map(stripV), shifts: this.data.shifts.map(stripV), settings: this.data.settings,
     };
   }
 
@@ -227,39 +238,95 @@ export class Store extends EventTarget {
     const groups = [
       ['employers', 'upsert'], ['shifts', 'upsert'], ['settings', 'upsert'], ['shifts', 'delete'], ['employers', 'delete'],
     ];
+    const done = list => { this.outbox = this.outbox.filter(o => !list.includes(o)); write(K.outbox(uid), this.outbox); };
     for (const [table, op] of groups) {
       const ops = snapshot.filter(o => o.table === table && o.op === op);
       if (!ops.length) continue;
-      for (let i = 0; i < ops.length; i += 500) {
-        const chunk = table === 'settings' ? ops.slice(-1) : ops.slice(i, i + 500);
-        let res;
-        if (table === 'settings') res = await this.sb.from('settings').upsert({ user_id: uid, data: chunk[0].row });
-        else if (op === 'upsert') {
+      if (table === 'settings') { await this.pushSettings(ops); done(ops); continue; }
+      if (op === 'upsert') {
+        // Endringer av rader serveren har sett før, sendes betinget (se pushChecked). Nye rader sendes samlet.
+        const checked = ops.filter(o => o.base), plain = ops.filter(o => !o.base);
+        for (const o of checked) { await this.pushChecked(table, o); done([o]); }
+        for (let i = 0; i < plain.length; i += 500) {
+          const chunk = plain.slice(i, i + 500);
           const rows = chunk.map(o => toRow[table](o.row, uid));
-          // Nye kolonner (series_id, fee, pay) som databasen ikke har ennå, sendes ikke. Appen sier fra under Konto.
-          this.missingCols ||= new Set();
-          const strip = () => rows.forEach(r => this.missingCols.forEach(c => delete r[c]));
-          strip();
-          res = await this.sb.from(table).upsert(rows);
-          for (let tries = 0; res.error && tries < 3; tries++) {
-            const col = ['series_id', 'fee', 'pay', 'status'].find(c => new RegExp(`\\b${c}\\b`).test(res.error.message || ''));
-            if (!col || this.missingCols.has(col)) break;
-            this.missingCols.add(col); this.emit('status'); strip();
-            res = await this.sb.from(table).upsert(rows);
-          }
+          const res = await this.withColumns(rows, () => this.sb.from(table).upsert(rows));
+          this.check(res, chunk);
+          for (const o of chunk) this.outbox = rebase(this.outbox, table, o.id, o.row, undefined, o);
+          done(chunk);
         }
-        else res = await this.sb.from(table).delete().in('id', chunk.map(o => o.id));
-        if (res.error) {
-          // Integritets-/tilgangsfeil løses ikke ved å prøve igjen: forkast, så retter neste henting opp lokalt.
-          if (/^(23|42501)/.test(res.error.code || '')) console.warn('Forkastet endringer som serveren avviste', res.error, chunk);
-          else throw new Error(res.error.message);
-        }
-        const done = table === 'settings' ? ops : chunk;
-        this.outbox = this.outbox.filter(o => !done.includes(o));
-        write(K.outbox(uid), this.outbox);
-        if (table === 'settings') break;
+        continue;
+      }
+      for (let i = 0; i < ops.length; i += 500) {
+        const chunk = ops.slice(i, i + 500);
+        this.check(await this.sb.from(table).delete().in('id', chunk.map(o => o.id)), chunk);
+        done(chunk);
       }
     }
+  }
+
+  // Integritets-/tilgangsfeil løses ikke ved å prøve igjen: forkast, så retter neste henting opp lokalt.
+  check(res, ops) {
+    if (!res.error) return;
+    if (/^(23|42501)/.test(res.error.code || '')) console.warn('Forkastet endringer som serveren avviste', res.error, ops);
+    else throw new Error(res.error.message);
+  }
+
+  // Nye kolonner (series_id, fee, pay, status) som databasen ikke har ennå, sendes ikke. Appen sier fra under Konto.
+  async withColumns(rows, call) {
+    this.missingCols ||= new Set();
+    const strip = () => rows.forEach(r => this.missingCols.forEach(c => delete r[c]));
+    strip();
+    let res = await call();
+    for (let tries = 0; res.error && tries < 3; tries++) {
+      const col = ['series_id', 'fee', 'pay', 'status'].find(c => new RegExp(`\\b${c}\\b`).test(res.error.message || ''));
+      if (!col || this.missingCols.has(col)) break;
+      this.missingCols.add(col); this.emit('status'); strip();
+      res = await call();
+    }
+    return res;
+  }
+
+  // Oppdaterer bare hvis raden fortsatt har versjonen endringen bygde på. Har en annen enhet
+  // endret den i mellomtiden, slås endringene sammen felt for felt, og det prøves på nytt.
+  async pushChecked(table, o) {
+    const uid = this.user.id;
+    let base = o.base, row = toRow[table](o.row, uid);
+    const prev = o.prev ? toRow[table](o.prev, uid) : null;
+    const clashes = new Set();
+    for (let tries = 0; tries < 4; tries++) {
+      const send = { ...row };
+      const res = await this.withColumns([send], () => this.sb.from(table).update(send).eq('id', o.id).eq('updated_at', base).select('updated_at'));
+      this.check(res, [o]);
+      if (res.error) return;
+      if (res.data?.length) {
+        this.outbox = rebase(this.outbox, table, o.id, o.row, res.data[0].updated_at, o);
+        if (clashes.size) this.emit('conflict', { table, id: o.id, row: o.row, fields: [...clashes] });
+        return;
+      }
+      const cur = await this.sb.from(table).select('*').eq('id', o.id).maybeSingle();
+      if (cur.error) throw new Error(cur.error.message);
+      if (!cur.data) { this.emit('conflict', { table, id: o.id, row: o.row, deleted: true }); return; } // slettet på en annen enhet
+      const merged = threeWay(prev, row, toRow[table](fromRow[table](cur.data), uid));
+      merged.clashes.forEach(c => clashes.add(c));
+      row = merged.row; base = cur.data.updated_at;
+    }
+    throw new Error('Raden endres stadig på en annen enhet. Prøver igjen.');
+  }
+
+  // Innstillinger: hent serverens versjon, legg på bare det som er endret her, og lagre betinget.
+  async pushSettings(ops) {
+    const uid = this.user.id, last = ops[ops.length - 1];
+    for (let tries = 0; tries < 4; tries++) {
+      const cur = await this.sb.from('settings').select('data,updated_at').maybeSingle();
+      if (cur.error) throw new Error(cur.error.message);
+      if (!cur.data) { this.check(await this.sb.from('settings').upsert({ user_id: uid, data: this.data.settings }), ops); return; }
+      const data = applyPaths(cur.data.data || {}, this.data.settings, last.paths);
+      const res = await this.sb.from('settings').update({ data }).eq('user_id', uid).eq('updated_at', cur.data.updated_at).select('updated_at');
+      this.check(res, ops);
+      if (res.error || res.data?.length) return;
+    }
+    throw new Error('Innstillingene endres stadig på en annen enhet. Prøver igjen.');
   }
 
   async fetchAll(table) {

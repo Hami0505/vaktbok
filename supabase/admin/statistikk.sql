@@ -62,8 +62,7 @@ select
     when s.user_agent ~* 'windows'                then 'Windows'
     when s.user_agent ~* 'linux'                  then 'Linux'
     else 'Ukjent'
-  end                                                   as system,
-  s.user_agent                                          as full_tekst
+  end                                                   as system
 from auth.sessions s
 join auth.users u on u.id = s.user_id
 order by sist_brukt desc nulls last;

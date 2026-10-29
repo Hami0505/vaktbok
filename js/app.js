@@ -30,7 +30,7 @@ export function renderSync() {
   const text = {
     local: 'Lagres på denne enheten',
     guest: 'Ikke logget inn',
-    syncing: 'Synker …',
+    syncing: 'Synkroniserer …',
     synced: 'Synkronisert',
     offline: n ? `Frakoblet, ${n} ${n === 1 ? 'endring venter' : 'endringer venter'}` : 'Frakoblet',
     error: 'Synk feilet, prøver igjen',
@@ -40,10 +40,25 @@ export function renderSync() {
   p.title = store.lastError || text;
 }
 
+// Gjestebanneret kommer tilbake 30 dager etter «Skjønner», så lenge vaktene bare ligger lokalt.
+const GUEST_WARNED = 'vaktbok:guest-warned';
+const GUEST_REMIND_DAYS = 30;
+function guestWarnDue() {
+  const v = localStorage.getItem(GUEST_WARNED);
+  if (!v) return true;
+  const t = Date.parse(v);
+  return Number.isNaN(t) || Date.now() - t > GUEST_REMIND_DAYS * 86400000; // gammel verdi «1» gir ny påminnelse
+}
+// Safari på iPhone/iPad når Vaktbok ikke er lagt til på Hjem-skjermen: der kan lokale data slettes etter sju dager uten bruk.
+function iosNotInstalled() {
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  return ios && !matchMedia('(display-mode: standalone)').matches && !navigator.standalone;
+}
+
 export function renderBanners() {
   const out = [];
-  if (!store.user && D().shifts.length && !localStorage.getItem('vaktbok:guest-warned')) {
-    out.push(`<div class="banner"><p>Uten konto ligger vaktene bare i denne nettleseren, og de kan bli slettet, for eksempel av Safari på iPhone etter sju dager uten bruk. ${store.configured ? 'Logg inn for å ta vare på dem.' : 'Last ned en kopi under Konto jevnlig.'}</p>
+  if (!store.user && D().shifts.length && guestWarnDue()) {
+    out.push(`<div class="banner"><p>Uten konto ligger vaktene bare i denne nettleseren, og de kan bli slettet, for eksempel av Safari på iPhone etter sju dager uten bruk. ${store.configured ? 'Logg inn for å ta vare på dem.' : 'Last ned en kopi under Konto jevnlig.'}${iosNotInstalled() ? ' Eller legg Vaktbok til på Hjem-skjermen: trykk Del og så «Legg til på Hjem-skjerm».' : ''}</p>
       ${store.configured ? '<button class="btn primary" data-action="go-login-banner">Logg inn</button>' : ''}<button class="btn link" data-action="dismiss-guest">Skjønner</button></div>`);
   }
   let v1 = null;
@@ -102,7 +117,7 @@ export const actions = {
     toast('Vakta er avslått', () => { store.upsertShift({ ...s }); toast('Vakta er tilbake'); });
   },
   'go-login-banner': () => { setTab('konto'); $('emailInput')?.focus(); },
-  'dismiss-guest': () => { localStorage.setItem('vaktbok:guest-warned', '1'); renderBanners(); },
+  'dismiss-guest': () => { localStorage.setItem(GUEST_WARNED, new Date().toISOString()); renderBanners(); },
   'edit-name': () => openNameDialog(false),
   'go-login': () => { $('importDialog').close(); setTab('konto'); $('emailInput')?.focus(); },
   'go-settings': () => { setTab('konto'); $('sTax').focus(); },
@@ -176,6 +191,28 @@ $('pdfBtn').addEventListener('click', pdfTimesheet);
 store.addEventListener('change', render);
 
 store.addEventListener('status', () => { renderSync(); if (ui.tab === 'konto') renderAccount(); });
+// Samtidige endringer på to enheter. Det meste slås sammen uten at brukeren merker det.
+// Beskjed gis bare når noe herfra ikke kunne beholdes, og flere samles til én.
+const FIELD = {
+  date: 'dato', start_time: 'start', end_time: 'slutt', break_min: 'pause', note: 'notat', employer_id: 'arbeidsgiver',
+  fee: 'beløp', status: 'tilbudt', series_id: 'gjentakelse', name: 'navn', rate: 'timelønn', color: 'farge',
+  rules: 'tillegg', overtime: 'overtid', pay: 'lønnsform', archived: 'skjult',
+};
+let conflicts = [], conflictT;
+store.addEventListener('conflict', ({ detail }) => {
+  conflicts.push(detail);
+  clearTimeout(conflictT);
+  conflictT = setTimeout(() => {
+    const list = conflicts; conflicts = [];
+    if (list.length > 1) { toast(`${list.length} endringer kolliderte med endringer fra en annen enhet. Sjekk vaktene du endret uten nett.`, null, 9000); return; }
+    const c = list[0];
+    const what = c.table === 'shifts' ? `Vakta ${fmtDay(c.row.date)}` : `Arbeidsgiveren ${c.row.name}`;
+    toast(c.deleted
+      ? `${what} ble slettet på en annen enhet, så endringen herfra ble ikke lagret.`
+      : `${what} ble endret på en annen enhet samtidig. For ${c.fields.map(f => FIELD[f] || f).join(', ')} gjelder endringen derfra. Sjekk at det stemmer.`, null, 9000);
+  }, 300);
+});
+
 
 store.addEventListener('guest-data', async ({ detail }) => {
   const n = detail.shifts?.length || 0;
@@ -250,6 +287,8 @@ store.init().then(() => {
 });
 
 registerSW();
+// Be nettleseren om varig lagring, så lokale vakter ikke ryddes bort når det blir lite plass.
+navigator.storage?.persist?.().catch(() => {});
 
 // Be nettleseren om å ikke rydde bort lokale data (virker i de fleste nettlesere, særlig når appen er installert).
 try { navigator.storage?.persist?.(); } catch { }

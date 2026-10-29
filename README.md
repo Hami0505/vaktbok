@@ -77,7 +77,8 @@ Krever Node.js 22 eller nyere for testene.
 
 ```bash
 npm start      # serverer appen på http://localhost:5173
-npm test       # kjører testene
+npm test       # kjører testene (logikk, datalag, synk, serverfunksjoner)
+npm run e2e    # grensesnittet i Chromium (første gang: npm install && npx playwright install chromium)
 ```
 
 Med tomme felt i `js/config.js` kjører appen uten server, bare med lokal lagring.

@@ -11,3 +11,23 @@ jobs:
         with:
           node-version: 22
       - run: npm test
+
+  # Grensesnittet i Chromium: 390, 320 og 1280 piksler, lys og mørk modus, axe for tilgjengelighet
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e
+        env:
+          CI: '1'
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-rapport
+          path: playwright-report/
+          retention-days: 7

@@ -85,7 +85,7 @@ export const D = () => store.data;
 export const empById = id => D().employers.find(e => e.id === id);
 
 // ---------- Små hjelpere ----------
-export function toast(msg, undo = null) {
+export function toast(msg, undo = null, ms = undo ? 7000 : 2600) {
   const t = $('toast');
   t.textContent = msg;
   t.classList.toggle('has-action', !!undo);
@@ -95,7 +95,7 @@ export function toast(msg, undo = null) {
     t.append(b);
   }
   t.classList.add('show');
-  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show', 'has-action'), undo ? 7000 : 2600);
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show', 'has-action'), ms);
 }
 
 export function confirmBox(title, text, okLabel, danger = false) {

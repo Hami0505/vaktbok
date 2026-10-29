@@ -16,16 +16,33 @@ const { Store } = await import('../js/store.js');
 function fakeSupabase() {
   const db = { employers: new Map(), shifts: new Map(), settings: new Map() };
   const calls = [];
-  let offline = false;
+  let offline = false, clock = 0;
+  const stamp = () => `2026-10-30T10:00:00.${String(++clock).padStart(6, '0')}+00:00`; // som Postgres: unik per skriving
   const res = (data = null) => offline ? Promise.reject(new TypeError('Failed to fetch')) : Promise.resolve({ data, error: null });
+  const key = (table, r) => table === 'settings' ? r.user_id : r.id;
   const from = table => ({
     upsert(rows) {
       calls.push(`${table}:upsert`);
       for (const r of [].concat(rows)) {
         if (table === 'shifts' && !db.employers.has(r.employer_id)) return Promise.resolve({ error: { code: '23503', message: 'fk' } });
-        db[table].set(r.id ?? r.user_id, r);
+        db[table].set(key(table, r), { ...r, updated_at: stamp() });
       }
       return res();
+    },
+    // update(...).eq(...).eq(...).select(): oppdaterer radene som passer alle filtrene
+    update(patch) {
+      const filters = [];
+      const q = {
+        eq: (c, v) => { filters.push([c, v]); return q; },
+        select: () => {
+          calls.push(`${table}:update`);
+          if (offline) return res();
+          const hit = [...db[table].values()].filter(r => filters.every(([c, v]) => r[c] === v));
+          for (const r of hit) Object.assign(r, patch, { updated_at: stamp() });
+          return res(hit.map(r => ({ updated_at: r.updated_at })));
+        },
+      };
+      return q;
     },
     delete() {
       return {
@@ -35,12 +52,13 @@ function fakeSupabase() {
     },
     select() {
       return {
-        order: () => ({ range: (a, b) => res([...db[table].values()].slice(a, b + 1)) }),
-        maybeSingle: () => res(db.settings.size ? { data: [...db.settings.values()][0].data } : null),
+        order: () => ({ range: (a, b) => res([...db[table].values()].slice(a, b + 1).map(r => ({ ...r }))) }),
+        eq: (_, id) => ({ maybeSingle: () => res(db[table].has(id) ? { ...db[table].get(id) } : null) }),
+        maybeSingle: () => res(db.settings.size ? { ...[...db.settings.values()][0] } : null),
       };
     },
   });
-  return { db, calls, from, setOffline: v => { offline = v; } };
+  return { db, calls, from, stamp, setOffline: v => { offline = v; } };
 }
 
 let store, sb;
@@ -176,4 +194,102 @@ test('Google-knappen: sender token og uhashet nonce til Supabase', async () => {
   await assert.rejects(() => s6.signInWithIdToken('tok', 'raw'), /nonce/);
   const s7 = new Store({}); s7.sb = null;
   await assert.rejects(() => s7.signInWithIdToken('tok', 'raw'), /no-server/);
+});
+
+// ---------- Samtidige endringer på to enheter ----------
+const tick = () => new Promise(r => setTimeout(r, 20));
+
+async function twoDevices() {
+  const e = store.upsertEmployer({ name: 'A', rate: 200, color: '#112233', rules: [] });
+  store.upsertShift({ employerId: e.id, date: '2026-10-21', start: '08:00', end: '16:00', breakMin: 30, note: '' });
+  await tick(); await store.sync();
+  const shift = store.data.shifts[0];
+  assert.ok(shift._v, 'versjonen fra serveren lagres lokalt');
+  return { e, shift };
+}
+
+test('offline-endring og endring fra annen enhet i ulike felt: begge beholdes', async () => {
+  const { shift } = await twoDevices();
+  sb.setOffline(true);
+  store.upsertShift({ ...shift, note: 'Avd 2' });               // denne enheten: notat
+  await tick();
+  Object.assign(sb.db.shifts.get(shift.id), { end_time: '17:00', updated_at: sb.stamp() }); // annen enhet: sluttid
+  const seen = []; store.addEventListener('conflict', e => seen.push(e.detail));
+  sb.setOffline(false); clearTimeout(store.retryT); store.syncing = false;
+  await store.sync();
+  const row = sb.db.shifts.get(shift.id);
+  assert.equal(row.note, 'Avd 2');
+  assert.equal(row.end_time, '17:00');
+  assert.equal(store.data.shifts[0].end, '17:00', 'lokalt får også den andre enhetens endring');
+  assert.equal(seen.length, 0, 'ingen beskjed når alt kunne slås sammen');
+});
+
+test('samme felt endret på begge: den første vinner, og brukeren får beskjed', async () => {
+  const { shift } = await twoDevices();
+  sb.setOffline(true);
+  store.upsertShift({ ...shift, end: '18:00' });
+  await tick();
+  Object.assign(sb.db.shifts.get(shift.id), { end_time: '17:00', updated_at: sb.stamp() });
+  const seen = []; store.addEventListener('conflict', e => seen.push(e.detail));
+  sb.setOffline(false); clearTimeout(store.retryT); store.syncing = false;
+  await store.sync();
+  assert.equal(sb.db.shifts.get(shift.id).end_time, '17:00');
+  assert.equal(seen.length, 1);
+  assert.deepEqual(seen[0].fields, ['end_time']);
+  assert.equal(store.pending, 0);
+});
+
+test('vakt slettet på en annen enhet: endringen her gjenoppretter den ikke', async () => {
+  const { shift } = await twoDevices();
+  sb.setOffline(true);
+  store.upsertShift({ ...shift, note: 'sent endring' });
+  await tick();
+  sb.db.shifts.delete(shift.id);
+  const seen = []; store.addEventListener('conflict', e => seen.push(e.detail));
+  sb.setOffline(false); clearTimeout(store.retryT); store.syncing = false;
+  await store.sync();
+  assert.equal(sb.db.shifts.size, 0);
+  assert.equal(store.data.shifts.length, 0);
+  assert.ok(seen[0].deleted);
+});
+
+test('flere endringer på rad uten nett gir ingen falsk kollisjon', async () => {
+  const { shift } = await twoDevices();
+  sb.setOffline(true);
+  store.upsertShift({ ...shift, note: 'én' });
+  store.upsertShift({ ...store.data.shifts[0], note: 'to', end: '15:00' });
+  await tick();
+  const seen = []; store.addEventListener('conflict', e => seen.push(e.detail));
+  sb.setOffline(false); clearTimeout(store.retryT); store.syncing = false;
+  await store.sync();
+  assert.equal(sb.db.shifts.get(shift.id).note, 'to');
+  assert.equal(sb.db.shifts.get(shift.id).end_time, '15:00');
+  assert.equal(seen.length, 0);
+  // og neste endring etter synk går rett igjennom
+  store.upsertShift({ ...store.data.shifts[0], note: 'tre' });
+  await tick(); await store.sync();
+  assert.equal(sb.db.shifts.get(shift.id).note, 'tre');
+  assert.equal(seen.length, 0);
+});
+
+test('innstillinger: lønnsslipper for ulike måneder fra to enheter beholdes begge', async () => {
+  store.updateSettings({ minRestH: 11 });
+  await tick(); await store.sync();
+  sb.setOffline(true);
+  store.updateSettings({ payslips: { '2026-09': { e1: 20000 } } });
+  await tick();
+  const srv = [...sb.db.settings.values()][0];
+  srv.data = { ...srv.data, payslips: { '2026-10': { e1: 25000 } }, weekLimitH: 40 }; srv.updated_at = sb.stamp();
+  sb.setOffline(false); clearTimeout(store.retryT); store.syncing = false;
+  await store.sync();
+  const data = [...sb.db.settings.values()][0].data;
+  assert.deepEqual(Object.keys(data.payslips).sort(), ['2026-09', '2026-10']);
+  assert.equal(data.weekLimitH, 40, 'endring fra den andre enheten beholdes');
+  assert.equal(store.data.settings.weekLimitH, 40);
+  assert.equal(store.data.settings.payslips['2026-09'].e1, 20000);
+});
+
+test('eksport tar ikke med interne versjonsfelt', async () => {
+  await twoDevices();
+  assert.ok(!('_v' in store.exportAll().shifts[0]));
 });

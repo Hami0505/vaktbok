@@ -203,7 +203,8 @@ dialog[open] { animation: rise .18s ease-out; }
 .slip .res.ok { color: var(--ok); }
 .slip .res.off { color: var(--bad); }
 .slip input { text-align: right; }
-.foot-links { display: flex; gap: 16px; }
+.foot-links { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.foot-links a { white-space: nowrap; }
 
 /* Klikkbar logo */
 .home-link { color: inherit; text-decoration: none; border-radius: 6px; }
