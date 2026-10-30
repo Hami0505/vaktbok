@@ -1,12 +1,12 @@
 # Vaktbok – prosjektoversikt
 
-Grunnmuren for videre arbeid. Oppdatert 29. oktober 2026. Når noe her endres, oppdater dette dokumentet.
+Grunnmuren for videre arbeid. Oppdatert 30. oktober 2026. Når noe her endres, oppdater dette dokumentet.
 
 ## 1. Hva Vaktbok er
 
-Vaktbok samler vakter fra flere arbeidsgivere på ett sted: ukestripe, timer, lønnsestimat med tillegg, overtid, feriepenger og skatt, og varsler om hviletid. Laget for folk med vakter hos flere arbeidsgivere, særlig via vikarbyrå og i helse og omsorg.
+Vaktbok samler vakter fra flere arbeidsgivere på ett sted: ukestripe, timer, lønnsestimat med tillegg, overtid, feriepenger og skatt, og varsler om hviletid. Laget for alle som har vakter hos flere arbeidsgivere, uansett bransje: vikarbyrå, helse, servering, butikk, lager og annet.
 
-Startet som Mandatory Assignment 3 (Vibe Coding) ved OsloMet, og videreutviklet til en ekte, gratis app.
+Startet som Mandatory Assignment 3 (Vibe Coding) ved OsloMet, og videreutviklet til en ekte, gratis webapp (PWA) som kan legges til på Hjem-skjermen.
 
 **Kriterier for alt arbeid:**
 - **Gratis.** Ingen betalte tjenester. Bruk gratisnivåene til GitHub Pages, Supabase og Brevo.
@@ -251,9 +251,13 @@ vaktbok-backup            # til ~/Documents/Vaktbok-backup, beholder 12
 
 ## 11. Gjenstår
 
-1. **Beta med 3–5 kolleger**, og rette det de finner.
-2. **Skrive CSS-en om** fra lag til én samlet beskrivelse, kontrollert mot skjermbilder.
-3. **Systematisk testing i Safari og på iPhone**, også Google-knappen.
+1. **Teste synk for hånd før LinkedIn-innlegget:** samme vakt endret på iPhone (flymodus) og Mac, både i ulike felt (begge beholdes) og samme felt (beskjed på iPhone).
+2. **Teste gjestebanneret i Safari på iPhone:** uten innlogging, med en vakt, skal det nevne Hjem-skjermen.
+3. **Beta med 3–5 kolleger**, og rette det de finner.
+4. **Skrive CSS-en om** fra lag til én samlet beskrivelse. Playwright-testene sjekker nå at ingen visning kan scrolles sidelengs.
+5. **Systematisk testing i Safari og på iPhone**, også Google-knappen.
+
+Ferdig 30. oktober: sammenslåing av samtidige endringer på to enheter, varig lagring og påminnelse om Hjem-skjermen for gjester i Safari, Playwright og axe i GitHub Actions, rettet bunnlenker som gjorde siden for bred på 320 piksler, spørring 6 i `statistikk.sql` uten rå nettlesertekst.
 
 Ferdig 29. oktober: sikkerhetskopi satt opp (`vaktbok-backup`, alias i `~/.zshrc`, adressen i nøkkelringen) og Google-innlogging publisert.
 

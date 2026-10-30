@@ -406,10 +406,13 @@ export class Store extends EventTarget {
   }
 
   // ---------- Statistikk for administrator (supabase/migrations/2026-10-28-statistikk.sql) ----------
+  // true/false når serveren har svart, null når den ikke kunne spørres (ikke lastet ennå, uten nett, feil).
   async isAdmin() {
-    if (!this.sb || !this.user) return false;
-    const { data, error } = await this.sb.rpc('is_admin');
-    return !error && data === true;
+    if (!this.sb || !this.user) return null;
+    try {
+      const { data, error } = await this.sb.rpc('is_admin');
+      return error ? null : data === true;
+    } catch { return null; }
   }
   async adminStats() {
     const { data, error } = await this.sb.rpc('admin_stats');

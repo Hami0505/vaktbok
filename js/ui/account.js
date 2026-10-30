@@ -91,13 +91,17 @@ $('feedBody').addEventListener('click', async ev => {
   } catch (e) { toast(friendlyError(e)); }
 });
 
-// Statistikk-knappen vises bare for administrator. Svaret huskes per bruker.
+// Statistikk-knappen vises bare for administrator. Svaret huskes per bruker, men bare når serveren
+// faktisk har svart. Ved oppstart tegnes Konto før Supabase er lastet, og det svaret skal ikke huskes.
 let adminCache = { user: null, yes: false };
 async function renderAdminButton() {
   const box = $('adminBtnBox'); if (!box) return;
   if (!store.user) { box.hidden = true; return; }
-  if (adminCache.user !== store.user.id) adminCache = { user: store.user.id, yes: await store.isAdmin() };
-  box.hidden = !adminCache.yes;
+  if (adminCache.user !== store.user.id) {
+    const user = store.user.id, yes = await store.isAdmin();
+    if (yes !== null && store.user?.id === user) adminCache = { user, yes };
+  }
+  box.hidden = !(adminCache.user === store.user?.id && adminCache.yes);
 }
 
 export function renderAccount() {

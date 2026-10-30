@@ -13,7 +13,10 @@ export async function loadAdmin() {
   loading = true; triedFor = store.user.id;
   $('admUpdated').textContent = 'Henter …';
   try {
-    if (!(await store.isAdmin())) { data = null; $('admUpdated').textContent = 'Du har ikke tilgang til statistikken.'; $('admTotals').innerHTML = ''; return; }
+    const admin = await store.isAdmin();
+    // Ikke svar ennå (Supabase lastes fortsatt, eller uten nett): prøv igjen ved neste oppdatering.
+    if (admin === null) { triedFor = null; $('admUpdated').textContent = 'Kobler til …'; return; }
+    if (!admin) { data = null; $('admUpdated').textContent = 'Du har ikke tilgang til statistikken.'; $('admTotals').innerHTML = ''; return; }
     data = await store.adminStats(); renderAdmin();
   }
   catch (e) { $('admUpdated').textContent = /tilgang|42501|admin_stats/i.test(e.message) ? 'Du har ikke tilgang, eller statistikk-SQL-en er ikke kjørt.' : 'Fikk ikke hentet statistikken.'; }

@@ -293,3 +293,18 @@ test('eksport tar ikke med interne versjonsfelt', async () => {
   await twoDevices();
   assert.ok(!('_v' in store.exportAll().shifts[0]));
 });
+
+test('administrator: ukjent svar (ikke lastet, feil) skilles fra nei', async () => {
+  const s8 = new Store({ supabaseUrl: 'x', supabaseAnonKey: 'y' });
+  s8.user = { id: 'u1' };
+  s8.sb = null;
+  assert.equal(await s8.isAdmin(), null, 'før Supabase er lastet');
+  s8.sb = { rpc: async () => ({ data: true, error: null }) };
+  assert.equal(await s8.isAdmin(), true);
+  s8.sb = { rpc: async () => ({ data: false, error: null }) };
+  assert.equal(await s8.isAdmin(), false);
+  s8.sb = { rpc: async () => ({ data: null, error: { message: 'nett' } }) };
+  assert.equal(await s8.isAdmin(), null);
+  s8.sb = { rpc: async () => { throw new TypeError('Failed to fetch'); } };
+  assert.equal(await s8.isAdmin(), null);
+});
